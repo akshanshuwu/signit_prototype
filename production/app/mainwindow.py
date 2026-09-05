@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
 
         self.file_panel = FilePanel(splitter)
         self.file_panel.sample_selected.connect(self.open_demo)
+        self.file_panel.file_ingested.connect(self._on_ingested)
 
         self.results_tabs = ResultsTabs(splitter)
 
@@ -135,3 +136,9 @@ class MainWindow(QMainWindow):
 
     def available_demos(self) -> tuple:
         return DEMO_IDS
+
+    def _on_ingested(self, result) -> None:
+        """Phase 2: report real ingest in the Mission Log (plots route in Phase 3)."""
+        from engine.ingest import log_lines
+
+        self.mission_log.set_lines(log_lines(result))

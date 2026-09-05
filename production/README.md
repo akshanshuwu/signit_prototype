@@ -2,7 +2,7 @@
 
 Locked stack: PySide6 + pyqtgraph + Qt-Material Dark + in-process Python (NumPy + pyFFTW + SciPy + Numba + memmap + QThread) + ONNX Runtime + galois + scikit-commpy + pyldpc + PyInstaller single .exe.
 
-Status: Phase 1 done (ops-console GUI on bundled demos; engine still mocked).
+Status: Phase 2 done (real ingest engine; estimators still mocked).
 Independent from prototype — no imports from `prototype/`.
 
 ## Phase 0 — what exists

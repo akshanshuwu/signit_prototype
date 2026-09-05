@@ -42,9 +42,8 @@ def test_file_validation_messages():
     from app.widgets.file_panel import validate_file
 
     assert "isn't supported" in validate_file("sig.exe", 100)
-    assert "up to 15 MB" in validate_file("big.iq", 20 * 1024 * 1024).lower() or "15 MB" in validate_file(
-        "big.iq", 20 * 1024 * 1024
-    )
+    big = validate_file("big.iq", 3 * 1024 * 1024 * 1024)
+    assert "2 GB" in big and "3072.0 MB" in big
     assert "passed validation" in validate_file("cap.iq", 100)
 
 

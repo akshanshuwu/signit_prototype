@@ -20,17 +20,18 @@ from PySide6.QtWidgets import (
 
 from app.demo_store import DEMO_IDS, SAMPLE_META
 
-MAX_MB = 15
+MAX_MB = 2048
+MAX_LABEL = "2 GB"
 _EXT_RE = re.compile(r"\.(iq|wav|bin)$", re.IGNORECASE)
 
 
 def validate_file(name: str, size_bytes: int) -> str:
-    """Mirror web UploadBox messages exactly."""
+    """Mirror web UploadBox messages (cap raised to 2 GB for desktop memmap ingest)."""
     if not _EXT_RE.search(name):
         return f"{name} isn't supported — please use .iq, .wav or .bin files."
     if size_bytes > MAX_MB * 1024 * 1024:
         return (
-            f"{name} is {size_bytes / 1048576:.1f} MB — files up to {MAX_MB} MB "
+            f"{name} is {size_bytes / 1048576:.1f} MB — files up to {MAX_LABEL} "
             f"are accepted. Try a sample capture below."
         )
     return f"{name} passed validation. Open a sample capture below to explore the full analysis."
@@ -38,6 +39,7 @@ def validate_file(name: str, size_bytes: int) -> str:
 
 class FilePanel(QWidget):
     sample_selected = Signal(str)
+    file_ingested = Signal(object)  # emits engine.ingest.IngestResult
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -49,7 +51,7 @@ class FilePanel(QWidget):
         drop_group = QGroupBox("Capture", self)
         drop_group.setObjectName("dropGroup")
         drop_layout = QVBoxLayout(drop_group)
-        self.drop_label = QLabel("Drop an .iq, .wav or .bin file here, or click Browse.\nUp to 15 MB.", drop_group)
+        self.drop_label = QLabel("Drop an .iq, .wav or .bin file here, or click Browse.\nUp to 2 GB (memmap).", drop_group)
         self.drop_label.setObjectName("dropLabel")
         self.drop_label.setAlignment(Qt.AlignCenter)
         self.drop_label.setStyleSheet("color: #94a3b8; padding: 16px;")
@@ -111,7 +113,13 @@ class FilePanel(QWidget):
         self.validation_msg.show()
 
     def check_path(self, path: str) -> str:
-        """Validate a real file path; shows message; returns message text."""
+        """Validate + ingest a real file path; shows message; returns message text.
+
+        Phase 2: runs the real ingest engine (memmap count + streaming hash +
+        bounded preview). Emits file_ingested on success.
+        """
+        from engine.ingest import IngestError, ingest_file
+
         name = os.path.basename(path)
         try:
             size = os.path.getsize(path)
@@ -120,8 +128,26 @@ class FilePanel(QWidget):
             self.show_message(msg)
             return msg
         msg = validate_file(name, size)
-        self.show_message(msg)
-        return msg
+        if "passed validation" not in msg:
+            self.show_message(msg)
+            return msg
+        try:
+            result = ingest_file(
+                path,
+                fs=int(self.fs_combo.currentText()),
+                fc=float(str(self.fc_combo.currentText()).split()[0]),
+                dtype_label=self.dtype_combo.currentText(),
+            )
+        except IngestError as exc:
+            self.show_message(str(exc))
+            return str(exc)
+        done = (
+            f"{name}: {result.n_samples} samples @ {result.fs} Hz "
+            f"({result.duration_s:.2f} s), sha256 {result.sha256[:12]}…"
+        )
+        self.show_message(done)
+        self.file_ingested.emit(result)
+        return done
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
