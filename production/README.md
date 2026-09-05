@@ -2,7 +2,7 @@
 
 Locked stack: PySide6 + pyqtgraph + Qt-Material Dark + in-process Python (NumPy + pyFFTW + SciPy + Numba + memmap + QThread) + ONNX Runtime + galois + scikit-commpy + pyldpc + PyInstaller single .exe.
 
-Status: Phase 5 done (ML vote — cumulant classifier + sklearn RandomForest ensemble + ONNX runtime hook; CNN model training is Phase 6).
+Status: Phase 6 done (FEC — pure-NumPy RS codec + Viterbi + de-interleave try-all with clean/structure/none verdicts; galois/commpy/pyldpc are optional accelerators).
 Independent from prototype — no imports from `prototype/`.
 
 ## Phase 0 — what exists

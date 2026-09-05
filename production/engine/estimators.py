@@ -246,7 +246,7 @@ def estimator_log_lines(est: EstimateResult) -> list[str]:
     ]
 
 
-def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, vote=None) -> dict:
+def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, vote=None, fec=None) -> dict:
     """Convert ingest + estimate (+ Phase-4 demod, + Phase-5 ML vote) into the demo contract.
 
     Without demod, modulation/classifier fields stay honestly pending.
@@ -296,6 +296,9 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, v
             "lags": [int(v) for v in demod.corr_lags],
             "vals": [float(v) for v in demod.corr_vals],
         }
+        fec_clean = fec is not None and getattr(fec, "status", "NONE") == "CLEAN"
+        if fec_clean:  # decoded payload replaces raw sliced bits in the Bits tab
+            bits_hex, bits_ascii = fec.hex_text, fec.ascii_text
         if vote_ok and vote.winner != demod.modulation:
             note = kind_note or (
                 f"ensemble {vote.winner} overrides demod {demod.modulation} "
@@ -311,6 +314,8 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, v
                 f"demod {demod.modulation} @ {demod.symbol_rate:.0f} sym/s; "
                 "ML vote pending"
             )
+        if fec_clean:
+            note += f" | FEC {fec.scheme} clean via {fec.deint}"
     else:
         bits_hex, bits_ascii = est.hex_text, est.ascii_text
         corr = {
