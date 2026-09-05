@@ -97,7 +97,6 @@ def fm_stream(x: np.ndarray, fs: int) -> np.ndarray:
 
 
 RATE_SEARCH_MAX = 65536  # samples entering baud estimation (FFT autocorr is O(N log N))
-SMOOTH_SCALES = (1, 4, 16, 64)  # moving-average scales beating discriminator noise
 
 
 def _fft_autocorr(e: np.ndarray) -> np.ndarray:
@@ -114,71 +113,89 @@ def _fft_autocorr(e: np.ndarray) -> np.ndarray:
     return ac / max(ac[0], 1e-30)
 
 
-def _moving_avg(e: np.ndarray, L: int) -> np.ndarray:
-    if L <= 1:
-        return e
-    kernel = np.ones(L) / L
-    return np.convolve(e, kernel, mode="same")
+def _nrz_coarse_sps(sig: np.ndarray, fs: int) -> float:
+    """Coarse samples/symbol from NRZ triangle decay (I/Q/fm are all NRZ-ish).
 
-
-def _first_peak(ac: np.ndarray, thresh: float = 0.15) -> tuple[float, float]:
-    """Smallest lag>=2 that is a local max above thresh. Returns (lag, value)."""
-    hi = len(ac) - 1
-    w = 2
-    for i in range(max(2, w), hi - w):
-        v = float(ac[i])
-        if v > thresh and v >= float(np.max(ac[i - w:i + w + 1])) - 1e-12 \
-                and v > float(ac[i - 1]) and v >= float(ac[i + 1]):
-            return float(i), v
-    return 0.0, 0.0
-
-
-def _baud_by_autocorr(edge: np.ndarray, fs: int) -> tuple[float, float]:
-    """Baud from first autocorrelation peak of a boundary-edge signal.
-
-    Edge spikes repeat every symbol (impulse-train spectra are flat, so
-    FFT peak-picking locks onto Nyquist instead). Smoothed multi-scale
-    autocorrelation finds the fundamental period directly and survives
-    discriminator noise (FSK-grade edges). Returns (rate_hz, peak_value);
-    peak 0.0 = no periodic boundaries.
+    Random-pulse streams decorrelate linearly (1-|k|/sps), crossing 0.5 at
+    sps/2 — scale-free, no amplitude threshold. White noise decorrelates
+    instantly (ac[1] ~= 0) and is rejected by the gate.
     """
+    e = np.asarray(sig, dtype=float).ravel()[:RATE_SEARCH_MAX]
+    if len(e) < 16:
+        return 0.0
+    ac = _fft_autocorr(e)
+    if len(ac) < 8 or ac[1] < 0.5:
+        return 0.0
+    hi = min(len(ac) - 1, int(fs // 50))  # baud >= 50 Hz
+    for i in range(2, hi):
+        if ac[i - 1] >= 0.5 > ac[i]:
+            frac = (ac[i - 1] - 0.5) / max(ac[i - 1] - ac[i], 1e-12)
+            return 2.0 * (i - 1.0 + float(np.clip(frac, 0.0, 1.0)))
+    return 0.0
+
+
+def _refine_sps(edge_ac: np.ndarray, coarse: float) -> tuple[float, float]:
+    """Exact (fractional) sps by maximizing edge periodicity near coarse.
+
+    The edge spike train peaks exactly at multiples of sps; argmax over a
+    +-15% window plus parabolic interpolation beats any global threshold.
+    Returns (sps, peak_value); peak ~0 means aperiodic (noise).
+    """
+    n = len(edge_ac)
+    lo = max(2, int(coarse * 0.85))
+    hi = min(n - 2, int(round(coarse * 1.15)) + 1)
+    if hi <= lo:
+        return 0.0, 0.0
+    seg = edge_ac[lo:hi]
+    j = int(np.argmax(seg))
+    peak = float(seg[j])
+    lag = lo + j
+    if 0 < j < len(seg) - 1:
+        a, b, c = float(seg[j - 1]), peak, float(seg[j + 1])
+        denom = a - 2 * b + c
+        shift = 0.5 * (a - c) / denom if denom != 0 else 0.0
+        lag = lag + float(np.clip(shift, -1.0, 1.0))
+    return lag, peak
+
+
+def _baud_from_pair(nrz: np.ndarray, edge: np.ndarray, fs: int) -> tuple[float, float]:
+    coarse = _nrz_coarse_sps(nrz, fs)
+    if coarse < 2.0:
+        return 0.0, 0.0
     e = np.asarray(edge, dtype=float).ravel()[:RATE_SEARCH_MAX]
-    best_rate, best_v = 0.0, 0.0
-    for L in SMOOTH_SCALES:
-        ac = _fft_autocorr(_moving_avg(e, L))
-        hi = min(len(ac) - 1, int(fs // 50))  # baud >= 50 Hz
-        if hi <= 4:
-            continue
-        lag, v = _first_peak(ac[:hi], thresh=0.15)
-        if lag >= 2.0 and v > best_v:
-            best_rate, best_v = float(fs) / lag, v
-    return best_rate, best_v
+    if len(e) < 16:
+        return 0.0, 0.0
+    sps, peak = _refine_sps(_fft_autocorr(e), coarse)
+    if sps < 2.0 or peak < 0.05:
+        return 0.0, 0.0
+    return float(fs) / sps, peak
 
 
 def estimate_symbol_rate(x_bb: np.ndarray, fs: int) -> tuple[float, str]:
-    """Baud estimate from symbol-boundary edge energy (autocorrelation).
+    """Baud estimate: NRZ-triangle coarse sps refined by edge periodicity.
 
-    Rectangular/band-limited PSK/QAM/FSK all concentrate transitions at
-    symbol boundaries, so the edge signal (|diff| energy) is baud-periodic
-    even when the envelope itself is constant (BPSK/QPSK) or the modulation
-    is frequency-keyed. Both the complex-sample edges (PSK/QAM-grade) and
-    the FM-deviation edges (FSK-grade) are tried; the stronger periodicity
-    wins.
+    I, Q and FM-deviation streams are all NRZ-ish for rectangular and
+    band-limited pulses alike (constant-envelope BPSK/QPSK and FSK
+    included — the FM stream carries FSK's baud). Each voter pairs its
+    NRZ stream (coarse, scale-free) with its boundary-edge stream
+    (exact fractional sps); the strongest edge periodicity wins.
 
     Returns (rate_hz, method). Rate 0.0 = no credible line found.
     """
     x_bb = _as_complex(x_bb)
-    edge_c = np.abs(np.diff(x_bb.astype(np.complex128))) ** 2
-    r_edge, v_edge = _baud_by_autocorr(edge_c, fs)
+    xc = x_bb.astype(np.complex128)
+    edge_c = np.abs(np.diff(xc)) ** 2
     fm = fm_stream(x_bb, fs)
-    r_fm, v_fm = _baud_by_autocorr(np.abs(np.diff(fm)), fs)
-    # Hard-limited FM sign: kills discriminator amplitude noise; the
-    # two-level FSK deviation then yields a clean boundary spike train
-    # (PSK data gives dense aperiodic sign flips — no false vote).
     signed = np.sign(fm - np.median(fm)).astype(float)
-    r_sfm, v_sfm = _baud_by_autocorr(np.abs(np.diff(signed)), fs)
+    voters = [
+        (xc.real, edge_c, "edge-I"),
+        (xc.imag, edge_c, "edge-Q"),
+        (fm, np.abs(np.diff(fm)), "fm-edge"),
+        (signed, np.abs(np.diff(signed)), "fm-sign"),
+    ]
     ranked = sorted(
-        ((r_edge, v_edge, "edge"), (r_fm, v_fm, "fm-edge"), (r_sfm, v_sfm, "fm-sign")),
+        ((rate, peak, name) for (rate, peak), name in
+         [(_baud_from_pair(nrz, edge, fs), name) for nrz, edge, name in voters]),
         key=lambda t: t[1],
     )
     (rate, peak, method) = ranked[-1]
@@ -392,7 +409,7 @@ def _dump_at(fm: np.ndarray, c: np.ndarray, sps: float, shift: float) -> np.ndar
     n_sym = min(int(n // sps), MAX_SYMBOLS)
     if n_sym < 1:
         return np.zeros(0)
-    centers = (np.arange(n_sym, dtype=np.float64) + 0.5) * sps + shift
+    centers = np.arange(n_sym, dtype=np.float64) * sps + shift
     half = sps / 4.0
     lo = np.clip(np.round(centers - half).astype(int), 0, n - 1)
     hi = np.clip(np.round(centers + half).astype(int), lo + 1, n)
