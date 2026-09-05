@@ -2,7 +2,7 @@
 
 Locked stack: PySide6 + pyqtgraph + Qt-Material Dark + in-process Python (NumPy + pyFFTW + SciPy + Numba + memmap + QThread) + ONNX Runtime + galois + scikit-commpy + pyldpc + PyInstaller single .exe.
 
-Status: Phase 2 done (real ingest engine; estimators still mocked).
+Status: Phase 3 done (real estimators — Welch PSD, spectrogram, constellation, SNR/BW — on ingest preview; classifier still mocked).
 Independent from prototype — no imports from `prototype/`.
 
 ## Phase 0 — what exists

@@ -138,7 +138,23 @@ class MainWindow(QMainWindow):
         return DEMO_IDS
 
     def _on_ingested(self, result) -> None:
-        """Phase 2: report real ingest in the Mission Log (plots route in Phase 3)."""
+        """Phase 3: run real estimators on the ingest preview; plots show measured data."""
+        import os
+
+        from engine.estimators import analyze_preview, estimator_log_lines, to_demo_dict
         from engine.ingest import log_lines
 
-        self.mission_log.set_lines(log_lines(result))
+        try:
+            est = analyze_preview(result.preview, result.fs, result.fc)
+        except Exception as exc:  # never leave the console blank on estimator failure
+            self.error_banner.setText(f"estimators failed: {exc}")
+            self.error_banner.show()
+            self.mission_log.set_lines(log_lines(result))
+            return
+        self.error_banner.hide()
+        demo = to_demo_dict(est, result)
+        self._demo_id = None
+        self.setWindowTitle(f"{APP_TITLE} · {os.path.basename(result.path)}")
+        self.results_tabs.set_demo(demo)
+        self.side_report.set_data(demo)
+        self.mission_log.set_lines(log_lines(result) + estimator_log_lines(est))
