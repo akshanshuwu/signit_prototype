@@ -246,12 +246,15 @@ def estimator_log_lines(est: EstimateResult) -> list[str]:
     ]
 
 
-def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None) -> dict:
-    """Convert ingest + estimate (+ optional Phase-4 demod) into the frozen demo-contract dict.
+def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, vote=None) -> dict:
+    """Convert ingest + estimate (+ Phase-4 demod, + Phase-5 ML vote) into the demo contract.
 
     Without demod, modulation/classifier fields stay honestly pending.
     With a credible demod, predictions carry the demod guess + margin-based
     confidence and the Bits tab shows demodulated bits + sync correlation.
+    With an ML vote, the ensemble winner (which may override the demod,
+    flagged in the note) sets modulation + confidence and all voter
+    cells are filled (CNN stays 0.0/pending until its model is trained).
     """
     from engine.ingest import IngestResult  # local import: avoid cycle
 
@@ -259,11 +262,33 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None) -
     base = os.path.basename(ingest.path)
     wav_snr = est.snr_db if ingest.kind == "wav" else max(0.0, est.snr_db - 5.5)
     demod_ok = demod is not None and getattr(demod, "modulation", "UNKNOWN") != "UNKNOWN"
-    if demod_ok:
+    vote_ok = vote is not None and getattr(vote, "winner", "UNKNOWN") != "UNKNOWN"
+    demod_conf = round(float(min(0.95, max(0.05, demod.margin_db / 12.0))), 2) if demod_ok else 0.0
+    if vote_ok:
+        modulation = vote.winner
+        confidence = round(float(vote.confidence), 2)
+        symbol_rate = int(round(demod.symbol_rate)) if demod_ok else 0
+        cum_txt = "pending"
+        for v in ("cumulants", "sklearn", "cnn"):
+            if v in vote.parts:
+                cum_txt = f"{vote.parts[v][0]} {vote.parts[v][1]:.2f}"
+                if v == "cumulants":
+                    break
+        votes = {
+            "CNN": round(float(vote.parts.get("cnn", ("pending", 0.0))[1]), 2),
+            "cumulants": cum_txt,
+            "demod": demod_conf,
+            "ensemble": confidence,
+        }
+    elif demod_ok:
         modulation = demod.modulation
-        confidence = round(float(min(0.95, max(0.05, demod.margin_db / 12.0))), 2)
+        confidence = demod_conf
         symbol_rate = int(round(demod.symbol_rate))
         votes = {"CNN": 0.0, "cumulants": "pending", "demod": confidence}
+    else:
+        modulation, confidence, symbol_rate = "UNKNOWN", 0.0, 0
+        votes = {"CNN": 0.0, "cumulants": "pending"}
+    if demod_ok:
         bits_hex, bits_ascii = demod.hex_text, demod.ascii_text
         corr = {
             "lag": int(demod.sync_lag),
@@ -271,13 +296,22 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None) -
             "lags": [int(v) for v in demod.corr_lags],
             "vals": [float(v) for v in demod.corr_vals],
         }
-        note = kind_note or (
-            f"demod {demod.modulation} @ {demod.symbol_rate:.0f} sym/s; "
-            "CNN/cumulants pending (ML phase)"
-        )
+        if vote_ok and vote.winner != demod.modulation:
+            note = kind_note or (
+                f"ensemble {vote.winner} overrides demod {demod.modulation} "
+                f"({vote.note}); CNN model pending"
+            )
+        elif vote_ok:
+            note = kind_note or (
+                f"ensemble {vote.winner} @ {demod.symbol_rate:.0f} sym/s "
+                f"({vote.note}); CNN model pending"
+            )
+        else:
+            note = kind_note or (
+                f"demod {demod.modulation} @ {demod.symbol_rate:.0f} sym/s; "
+                "ML vote pending"
+            )
     else:
-        modulation, confidence, symbol_rate = "UNKNOWN", 0.0, 0
-        votes = {"CNN": 0.0, "cumulants": "pending"}
         bits_hex, bits_ascii = est.hex_text, est.ascii_text
         corr = {
             "lag": int(est.corr_lag),

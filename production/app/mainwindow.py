@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
         return DEMO_IDS
 
     def _on_ingested(self, result) -> None:
-        """Phase 4: estimators + try-all demod; plots show measured data, Bits tab demodulated."""
+        """Phase 5: estimators + demod + ML vote; report shows ensemble winner."""
         import os
 
         from engine.demod import demod_log_lines, demodulate_preview
@@ -158,10 +158,16 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # demod failure falls back to estimator-only view
             demod = None
             demod_lines = [f"demod failed: {exc} — showing estimator-only view"]
+        try:
+            from ml.ensemble import run_ml_vote
+
+            _cum, vote, _cnn, ml_lines = run_ml_vote(result.preview, result.fs, demod)
+        except Exception as exc:  # ML failure keeps the demod view
+            vote, ml_lines = None, [f"ml vote failed: {exc} — showing demod view"]
         self.error_banner.hide()
-        demo = to_demo_dict(est, result, demod=demod)
+        demo = to_demo_dict(est, result, demod=demod, vote=vote)
         self._demo_id = None
         self.setWindowTitle(f"{APP_TITLE} · {os.path.basename(result.path)}")
         self.results_tabs.set_demo(demo)
         self.side_report.set_data(demo)
-        self.mission_log.set_lines(log_lines(result) + estimator_log_lines(est) + demod_lines)
+        self.mission_log.set_lines(log_lines(result) + estimator_log_lines(est) + demod_lines + ml_lines)

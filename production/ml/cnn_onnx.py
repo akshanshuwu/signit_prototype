@@ -1,0 +1,72 @@
+"""CNN vote via ONNX Runtime — Phase 5 runtime (model lands in Phase 6).
+
+Contract (frozen for the training phase):
+  input:  (1, 1, 64, 64) float32 constellation-density image from
+          constellation_image() below, values in [0, 1]
+  output: (1, 4) logits over ("BPSK", "QPSK", "16QAM", "2FSK")
+  file:   ml/models/signit_cnn.onnx (repo-excluded until trained)
+
+Without a model file (or without onnxruntime installed) the vote is
+"pending" with weight 0 — the ensemble never waits on it. Use
+ml/train_cnn.py to produce the model.
+"""
+from __future__ import annotations
+
+import os
+
+import numpy as np
+
+CLASSES = ("BPSK", "QPSK", "16QAM", "2FSK")
+IMG = 64
+
+
+def model_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "signit_cnn.onnx")
+
+
+def constellation_image(x: np.ndarray, size: int = IMG, n: int = 4096) -> np.ndarray:
+    """64x64 density image of complex samples (shared train/infer preprocessing)."""
+    y = np.asarray(x, dtype=np.complex64).ravel()[:n]
+    if y.size == 0:
+        return np.zeros((1, 1, size, size), dtype=np.float32)
+    mag = float(np.max(np.abs(y)))
+    if mag <= 0:
+        return np.zeros((1, 1, size, size), dtype=np.float32)
+    yn = y / mag * 0.95  # into [-1, 1]
+    ix = np.clip(((yn.real + 1.0) / 2.0 * size).astype(int), 0, size - 1)
+    iy = np.clip(((yn.imag + 1.0) / 2.0 * size).astype(int), 0, size - 1)
+    img = np.zeros((size, size), dtype=np.float32)
+    np.add.at(img, (iy, ix), 1.0)
+    img /= max(img.max(), 1e-9)
+    return img.reshape(1, 1, size, size)
+
+
+def cnn_vote(preview: np.ndarray, fs: int) -> dict:
+    """Vote dict {modulation, confidence, note}. Never raises."""
+    path = model_path()
+    if not os.path.isfile(path):
+        return {
+            "modulation": "pending", "confidence": 0.0,
+            "note": "signit_cnn.onnx not trained yet (Phase 6)",
+        }
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        return {
+            "modulation": "pending", "confidence": 0.0,
+            "note": "onnxruntime not installed — cnn abstains",
+        }
+    try:
+        sess = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+        img = constellation_image(preview)
+        logits = np.asarray(sess.run(None, {sess.get_inputs()[0].name: img})[0]).ravel()
+        ex = np.exp(logits - logits.max())
+        proba = ex / ex.sum()
+        best = int(np.argmax(proba))
+        return {
+            "modulation": str(CLASSES[best]) if best < len(CLASSES) else "UNKNOWN",
+            "confidence": float(proba[best]),
+            "note": f"onnx {os.path.basename(path)}",
+        }
+    except Exception as exc:
+        return {"modulation": "pending", "confidence": 0.0, "note": f"cnn infer failed: {exc}"}
