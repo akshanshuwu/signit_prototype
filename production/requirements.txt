@@ -1,0 +1,19 @@
+# SIGNIT Production — pinned runtime (Windows .exe target: Python 3.10).
+# Local dev here is Python 3.14; CI builds with 3.10 (see .github/workflows/windows-build.yml).
+PySide6==6.7.2
+pyqtgraph==0.13.7
+qt-material==2.14
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.1
+onnxruntime==1.18.1
+numba==0.60.0
+pyFFTW==0.14.0
+soundfile==0.12.1
+matplotlib==3.9.2
+galois==0.3.10
+scikit-commpy==0.8.0
+pyldpc==0.7.7
+pyinstaller==6.9.0
+pytest==8.3.2
+PyYAML==6.0.2
