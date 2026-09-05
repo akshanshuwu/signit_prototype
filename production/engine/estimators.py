@@ -246,37 +246,65 @@ def estimator_log_lines(est: EstimateResult) -> list[str]:
     ]
 
 
-def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "") -> dict:
-    """Convert ingest + estimate into the frozen demo-contract dict for ResultsTabs.
+def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None) -> dict:
+    """Convert ingest + estimate (+ optional Phase-4 demod) into the frozen demo-contract dict.
 
-    Modulation/classifier fields stay honestly pending — the classifier
-    lands in a later phase (ML vote). All plotted arrays are real.
+    Without demod, modulation/classifier fields stay honestly pending.
+    With a credible demod, predictions carry the demod guess + margin-based
+    confidence and the Bits tab shows demodulated bits + sync correlation.
     """
     from engine.ingest import IngestResult  # local import: avoid cycle
 
     assert isinstance(ingest, IngestResult)
     base = os.path.basename(ingest.path)
     wav_snr = est.snr_db if ingest.kind == "wav" else max(0.0, est.snr_db - 5.5)
-    note = kind_note or (
-        "measured from capture preview; classifier pending (later phase)"
-        if ingest.kind == "iq"
-        else f"wav fs {ingest.fs} Hz from header; I=left/Q=right; classifier pending"
-    )
+    demod_ok = demod is not None and getattr(demod, "modulation", "UNKNOWN") != "UNKNOWN"
+    if demod_ok:
+        modulation = demod.modulation
+        confidence = round(float(min(0.95, max(0.05, demod.margin_db / 12.0))), 2)
+        symbol_rate = int(round(demod.symbol_rate))
+        votes = {"CNN": 0.0, "cumulants": "pending", "demod": confidence}
+        bits_hex, bits_ascii = demod.hex_text, demod.ascii_text
+        corr = {
+            "lag": int(demod.sync_lag),
+            "value": float(demod.sync_value),
+            "lags": [int(v) for v in demod.corr_lags],
+            "vals": [float(v) for v in demod.corr_vals],
+        }
+        note = kind_note or (
+            f"demod {demod.modulation} @ {demod.symbol_rate:.0f} sym/s; "
+            "CNN/cumulants pending (ML phase)"
+        )
+    else:
+        modulation, confidence, symbol_rate = "UNKNOWN", 0.0, 0
+        votes = {"CNN": 0.0, "cumulants": "pending"}
+        bits_hex, bits_ascii = est.hex_text, est.ascii_text
+        corr = {
+            "lag": int(est.corr_lag),
+            "value": float(est.corr_value),
+            "lags": [int(v) for v in est.corr_lags],
+            "vals": [float(v) for v in est.corr_vals],
+        }
+        note = kind_note or (
+            "measured from capture preview; classifier pending (later phase)"
+            if ingest.kind == "iq"
+            else f"wav fs {ingest.fs} Hz from header; I=left/Q=right; classifier pending"
+        )
     return {
         "meta": {
-            "modulation": "UNKNOWN",
+            "modulation": modulation,
             "fs": ingest.fs,
-            "symbol_rate": 0,
+            "symbol_rate": symbol_rate,
             "snr_db": round(est.snr_db, 1),
             "center_freq": ingest.fc,
             "file": base,
         },
         "predictions": {
-            "modulation": "UNKNOWN",
-            "confidence": 0.0,
-            "votes": {"CNN": 0.0, "cumulants": "pending"},
+            "modulation": modulation,
+            "confidence": confidence,
+            "votes": votes,
             "fs_est": ingest.fs,
-            "symbol_rate_est": 0,
+            "symbol_rate_est": symbol_rate,
             "bw_est": round(float(est.bw_hz), 1),
             "snr_est": round(float(est.snr_db), 1),
         },
@@ -294,14 +322,9 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "") -> dict:
             "q": [float(v) for v in est.const_q],
         },
         "bits_preview": {
-            "hex": est.hex_text,
-            "ascii": est.ascii_text,
-            "corr_peak": {
-                "lag": int(est.corr_lag),
-                "value": float(est.corr_value),
-                "lags": [int(v) for v in est.corr_lags],
-                "vals": [float(v) for v in est.corr_vals],
-            },
+            "hex": bits_hex,
+            "ascii": bits_ascii,
+            "corr_peak": corr,
         },
         "comparator": {
             "iq_snr": round(float(est.snr_db), 1),
