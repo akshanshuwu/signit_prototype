@@ -254,7 +254,8 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, v
     confidence and the Bits tab shows demodulated bits + sync correlation.
     With an ML vote, the ensemble winner (which may override the demod,
     flagged in the note) sets modulation + confidence and all voter
-    cells are filled (CNN stays 0.0/pending until its model is trained).
+    cells are filled (CNN contributes once ml/models/signit_cnn.onnx exists,
+    else it abstains as pending).
     """
     from engine.ingest import IngestResult  # local import: avoid cycle
 
@@ -302,12 +303,12 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, v
         if vote_ok and vote.winner != demod.modulation:
             note = kind_note or (
                 f"ensemble {vote.winner} overrides demod {demod.modulation} "
-                f"({vote.note}); CNN model pending"
+                f"({vote.note})"
             )
         elif vote_ok:
             note = kind_note or (
                 f"ensemble {vote.winner} @ {demod.symbol_rate:.0f} sym/s "
-                f"({vote.note}); CNN model pending"
+                f"({vote.note})"
             )
         else:
             note = kind_note or (

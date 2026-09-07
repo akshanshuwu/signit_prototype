@@ -18,7 +18,7 @@ export default function UploadBox() {
       setMsg(`${f.name} is ${(f.size / 1048576).toFixed(1)} MB — files up to ${MAX_MB} MB are accepted. Try a sample capture below.`);
       return;
     }
-    setMsg(`${f.name} passed validation. Open a sample capture below to explore the full analysis.`);
+    setMsg(`${f.name} passed validation. Prototype demo mode — showing sample result. Full blind decode in production. Open a sample capture below to explore the full analysis.`);
   }
 
   return (

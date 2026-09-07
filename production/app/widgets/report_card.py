@@ -49,10 +49,16 @@ class ReportCard(QWidget):
         self.footer.setStyleSheet("color: #64748b; font-size: 11px;")
         self.footer.setWordWrap(True)
 
+        self.explain = QLabel("", self)
+        self.explain.setObjectName("explainLabel")
+        self.explain.setStyleSheet("color: #67e8f9; font-size: 11px;")
+        self.explain.setWordWrap(True)
+
         layout.addWidget(self.mod_label)
         layout.addWidget(self.conf_label)
         layout.addWidget(self.conf_bar)
         layout.addLayout(self.grid)
+        layout.addWidget(self.explain)
         layout.addWidget(self.footer)
         layout.addStretch(1)
 
@@ -79,6 +85,12 @@ class ReportCard(QWidget):
         self._cells["snr"].setText(f"{p['snr_est']:.1f} dB")
         self._cells["cnn"].setText(f"{p['votes']['CNN'] * 100:.0f}% {p['modulation']}")
         self._cells["cumulants"].setText(str(p["votes"]["cumulants"]))
+        try:
+            from ml.explain import explain_line_from_votes
+
+            self.explain.setText(explain_line_from_votes(p["votes"]))
+        except Exception:
+            self.explain.setText("")
         m = demo["meta"]
         self.footer.setText(
             f"File: {m['file']} · fs {m['fs']} Hz · {m['symbol_rate']} sym/s · SNR {m['snr_db']} dB"

@@ -8,7 +8,10 @@ dist/
 build/
 # Venvs
 .venv/
+.train-venv/
 venv/
+# Trained model artifacts (reproducible via production/ml/train_cnn.py)
+production/ml/models/
 # macOS / Windows
 .DS_Store
 Thumbs.db

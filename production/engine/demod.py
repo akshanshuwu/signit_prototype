@@ -171,6 +171,15 @@ def _baud_from_pair(nrz: np.ndarray, edge: np.ndarray, fs: int) -> tuple[float, 
     return float(fs) / sps, peak
 
 
+def _moving_avg(v: np.ndarray, length: int) -> np.ndarray:
+    """Centered moving average (same length). Tames sample-level noise while
+    preserving symbol-rate transitions when length < sps."""
+    if length <= 1:
+        return np.asarray(v, dtype=float)
+    kernel = np.ones(int(length), dtype=float) / float(length)
+    return np.convolve(np.asarray(v, dtype=float), kernel, mode="same")
+
+
 def estimate_symbol_rate(x_bb: np.ndarray, fs: int) -> tuple[float, str]:
     """Baud estimate: NRZ-triangle coarse sps refined by edge periodicity.
 
@@ -179,6 +188,15 @@ def estimate_symbol_rate(x_bb: np.ndarray, fs: int) -> tuple[float, str]:
     included — the FM stream carries FSK's baud). Each voter pairs its
     NRZ stream (coarse, scale-free) with its boundary-edge stream
     (exact fractional sps); the strongest edge periodicity wins.
+
+    The phase-difference discriminator amplifies sample noise, so at
+    moderate SNR (per-sample SNR ~ -2 dB at 24 sps) raw FM sign flips are
+    near-random and the plain fm-sign voter goes blind. The smoothed
+    fm-sign-s4/s8 voters low-pass the FM stream first (averaging ~4-8x
+    noise variance away while keeping transitions for sps > 16); they
+    only add votes — winner-takes-all by peak keeps old behavior where
+    the raw streams already work, and white noise stays aperiodic after
+    smoothing so the peak floor still rejects it.
 
     Returns (rate_hz, method). Rate 0.0 = no credible line found.
     """
@@ -193,6 +211,10 @@ def estimate_symbol_rate(x_bb: np.ndarray, fs: int) -> tuple[float, str]:
         (fm, np.abs(np.diff(fm)), "fm-edge"),
         (signed, np.abs(np.diff(signed)), "fm-sign"),
     ]
+    for length in (4, 8):
+        fms = _moving_avg(fm, length)
+        ssigned = np.sign(fms - np.median(fms)).astype(float)
+        voters.append((ssigned, np.abs(np.diff(ssigned)), f"fm-sign-s{length}"))
     ranked = sorted(
         ((rate, peak, name) for (rate, peak), name in
          [(_baud_from_pair(nrz, edge, fs), name) for nrz, edge, name in voters]),

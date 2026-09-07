@@ -9,11 +9,13 @@ import re
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
     QLabel,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -40,6 +42,7 @@ def validate_file(name: str, size_bytes: int) -> str:
 class FilePanel(QWidget):
     sample_selected = Signal(str)
     file_ingested = Signal(object)  # emits engine.ingest.IngestResult
+    reanalyze_requested = Signal(dict)  # {t0_s|None, t1_s|None, snr_db|None, freq_offset_hz}
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -93,6 +96,39 @@ class FilePanel(QWidget):
         form.addRow("dtype:", self.dtype_combo)
         layout.addWidget(params_group)
 
+        # Re-analysis: ROI slice + impairment probes on the ingested capture.
+        re_group = QGroupBox("Re-analysis (ROI + impairments)", self)
+        re_group.setObjectName("reanalysisGroup")
+        re_form = QFormLayout(re_group)
+        self.roi_t0 = QDoubleSpinBox(re_group)
+        self.roi_t0.setObjectName("roiStartSpin")
+        self.roi_t0.setRange(0.0, 3600.0)
+        self.roi_t0.setDecimals(2)
+        self.roi_t0.setSuffix(" s")
+        self.roi_t0.setSpecialValueText("start")
+        self.roi_t1 = QDoubleSpinBox(re_group)
+        self.roi_t1.setObjectName("roiEndSpin")
+        self.roi_t1.setRange(0.0, 3600.0)
+        self.roi_t1.setDecimals(2)
+        self.roi_t1.setSuffix(" s")
+        self.roi_t1.setSpecialValueText("end")
+        self.impair_snr = QComboBox(re_group)
+        self.impair_snr.setObjectName("impairSnrCombo")
+        self.impair_snr.addItems(["off", "20 dB", "12 dB", "8 dB", "5 dB"])
+        self.impair_fo = QSpinBox(re_group)
+        self.impair_fo.setObjectName("impairFoSpin")
+        self.impair_fo.setRange(-5000, 5000)
+        self.impair_fo.setSuffix(" Hz")
+        self.reanalyze_btn = QPushButton("Re-analyze", re_group)
+        self.reanalyze_btn.setObjectName("reanalyzeButton")
+        self.reanalyze_btn.clicked.connect(self._request_reanalyze)
+        re_form.addRow("slice start:", self.roi_t0)
+        re_form.addRow("slice end:", self.roi_t1)
+        re_form.addRow("+AWGN:", self.impair_snr)
+        re_form.addRow("+freq offset:", self.impair_fo)
+        re_form.addRow(self.reanalyze_btn)
+        layout.addWidget(re_group)
+
         # Sample captures
         samples_group = QGroupBox("Sample captures", self)
         samples_group.setObjectName("samplesGroup")
@@ -111,6 +147,16 @@ class FilePanel(QWidget):
     def show_message(self, text: str) -> None:
         self.validation_msg.setText(text)
         self.validation_msg.show()
+
+    def _request_reanalyze(self) -> None:
+        """Emit the ROI/impairment spec; 0.0 spin = unbounded slice edge."""
+        snr_txt = self.impair_snr.currentText()
+        self.reanalyze_requested.emit({
+            "t0_s": None if self.roi_t0.value() <= 0.0 else float(self.roi_t0.value()),
+            "t1_s": None if self.roi_t1.value() <= 0.0 else float(self.roi_t1.value()),
+            "snr_db": None if snr_txt == "off" else float(snr_txt.split()[0]),
+            "freq_offset_hz": float(self.impair_fo.value()),
+        })
 
     def check_path(self, path: str) -> str:
         """Validate + ingest a real file path; shows message; returns message text.

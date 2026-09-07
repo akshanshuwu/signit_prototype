@@ -1,14 +1,14 @@
 """Vote ensemble — Phase 5.
 
 Weighted poll of independent voters:
-  demod      (EVM try-all, weight 0.45)
+  demod      (EVM try-all, weight 0.40)
   cumulants   (theory table, weight 0.25)
-  sklearn     (RandomForest on 5 DSP features, weight 0.30)
-  cnn        (ONNX model, weight 0.00 until a model file exists)
+  sklearn     (RandomForest on 5 DSP features, weight 0.20)
+  cnn        (ONNX constellation-image model, weight 0.15)
 
 ABSTAIN > GUESS: UNKNOWN voters contribute no weight; total abstention
-stays UNKNOWN. A winner that overrides the demod is flagged and its
-confidence tempered.
+stays UNKNOWN, and a lone uncorroborated CNN vote also abstains. A winner
+that overrides the demod is flagged and its confidence tempered.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import numpy as np
 
 from ml.cumulants import CLASSES, CumulantResult
 
-WEIGHTS = {"demod": 0.45, "cumulants": 0.25, "sklearn": 0.30, "cnn": 0.00}
+WEIGHTS = {"demod": 0.40, "cumulants": 0.25, "sklearn": 0.20, "cnn": 0.15}
 
 _MODEL = None  # lazily trained RandomForest (single GUI thread for now)
 _TRAIN_SECS = 0.0
@@ -125,6 +125,11 @@ def combine(demod=None, cumulants: CumulantResult | None = None,
         parts["cnn"] = (str(cnn_vote[0]), float(cnn_vote[1]))
     if not parts:
         return VoteResult(note="all voters abstained")
+    if set(parts) == {"cnn"}:
+        # A lone CNN vote never outranks honest abstention: at very low SNR
+        # the classical voters abstain while the CNN still guesses (often
+        # wrong). corroboration required — ABSTAIN > GUESS.
+        return VoteResult(note=f"cnn uncorroborated ({parts['cnn']}) — abstain")
     scores: dict[str, float] = {}
     for voter, (mod, conf) in parts.items():
         scores[mod] = scores.get(mod, 0.0) + WEIGHTS[voter] * conf

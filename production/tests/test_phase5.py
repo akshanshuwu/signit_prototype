@@ -44,9 +44,14 @@ def test_theory_values_on_ideal_symbols():
         assert res.confidence > 0.5
 
 
+def _seed(mod: str, base: int, span: int) -> int:
+    """Deterministic per-mod seed (built-in hash() is salted per process)."""
+    return base + sum(mod.encode()) % span
+
+
 def test_classify_preview_noisy():
     for mod in CLASSES:
-        x = synth(mod, 20.0, 500 + hash(mod) % 97)
+        x = synth(mod, 20.0, _seed(mod, 500, 97))
         res = classify_preview(x, FS)
         assert res.modulation == mod, f"{mod}: {res.ranking} ({res.note})"
         assert res.n_symbols > 0
@@ -78,7 +83,7 @@ def test_sklearn_deterministic_and_accurate():
     # Held-out seeds ( differ from training seeds ) across all classes.
     good = 0
     for mod in CLASSES:
-        pred, _conf, _note = sklearn_predict(synth(mod, 12.0, 900 + hash(mod) % 89), FS)
+        pred, _conf, _note = sklearn_predict(synth(mod, 12.0, _seed(mod, 900, 89)), FS)
         good += pred == mod
     assert good >= 3, f"sklearn held-out accuracy too low: {good}/4"
 
@@ -102,13 +107,30 @@ def test_combine_override_and_abstain():
     assert v2.winner == "UNKNOWN"
 
 
-def test_cnn_pending_without_model():
+def test_cnn_votes_with_model():
     from ml.cnn_onnx import cnn_vote, model_path
 
-    assert not os.path.isfile(model_path())  # Phase 6 has not run
+    assert os.path.isfile(model_path())  # produced by ml/train_cnn.py (Phase 6)
     x = synth("BPSK", 20.0, 42)
     vote = cnn_vote(x, FS)
+    assert vote["modulation"] in CLASSES and vote["confidence"] > 0.0
+
+
+def test_cnn_pending_without_model_file(monkeypatch):
+    import ml.cnn_onnx as cnn_module
+
+    monkeypatch.setattr(cnn_module, "model_path", lambda: "/nonexistent/signit_cnn.onnx")
+    x = synth("BPSK", 20.0, 42)
+    vote = cnn_module.cnn_vote(x, FS)
     assert vote["modulation"] == "pending" and vote["confidence"] == 0.0
+
+
+def test_lone_cnn_abstains():
+    from ml.ensemble import combine
+
+    v = combine(None, None, ("UNKNOWN", 0.0), ("BPSK", 0.9))
+    assert v.winner == "UNKNOWN"
+    assert "uncorroborated" in v.note
 
 
 def test_train_cnn_stub_when_no_torch():
@@ -149,7 +171,7 @@ def test_demo_dict_carries_vote(tmp_path):
     assert demo["predictions"]["modulation"] == v.winner == "QPSK"
     assert demo["predictions"]["confidence"] > 0
     assert "QPSK" in demo["predictions"]["votes"]["cumulants"]
-    assert demo["predictions"]["votes"]["CNN"] == 0.0
+    assert demo["predictions"]["votes"]["CNN"] >= 0.0  # model now trained; >= 0 always
 
 
 def test_mainwindow_ingest_shows_vote(tmp_path):

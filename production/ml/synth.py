@@ -64,12 +64,17 @@ def synth(mod: str, snr_db: float, seed: int, n_sym: int = N_SYM) -> np.ndarray:
     return _channel(x, snr_db, 200.0, seed)
 
 
+def _mod_code(mod: str) -> int:
+    """Deterministic per-mod code (built-in hash() is salted per process)."""
+    return sum(mod.encode()) % 997
+
+
 def training_set() -> tuple[list[np.ndarray], list[str]]:
     """Deterministic (bursts, labels). 4 mods x 3 SNRs x 2 seeds = 24 bursts."""
     xs, ys = [], []
     for mod in CLASSES:
         for snr in TRAIN_SNRS:
             for k, seed in enumerate(TRAIN_SEEDS):
-                xs.append(synth(mod, snr, seed * 1000 + hash(mod) % 997 + k))
+                xs.append(synth(mod, snr, seed * 1000 + _mod_code(mod) + k))
                 ys.append(mod)
     return xs, ys
