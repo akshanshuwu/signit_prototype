@@ -61,9 +61,11 @@ def test_mainwindow_opens_all_demos_all_tabs():
 
     win = _make_window()
     try:
-        assert win.demo_id == "qpsk"  # default view mirrors web CTA
+        assert win.demo_id is None  # F1+: empty drop-prompt startup, no auto demo
+        assert win._demo is None
+        assert "drop any" in win.mission_log.toPlainText().lower()
         for demo_id in ("bpsk", "qpsk", "qam16", "fsk2"):
-            assert win.open_demo(demo_id) is True
+            assert win.open_demo(demo_id) is True  # fallback path still valid
             assert win.demo_id == demo_id
             assert demo_id.upper() in win.windowTitle()
             for index in range(len(TAB_ORDER)):

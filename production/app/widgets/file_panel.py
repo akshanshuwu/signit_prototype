@@ -1,7 +1,8 @@
 """File panel — left dock: drop/select file, params, sample cards.
 
-Web UploadBox parity: accepts .iq/.wav/.bin; same validation messages;
-Phase 1 validates only (real ingest lands in Phase 2) and points at samples.
+Web UploadBox parity: accepts .iq/.wav/.bin; same validation messages.
+Sample buttons emit synthetic-reference keys (live chain via ml/synth.py),
+NOT bundled JSONs — demo_store is fallback-only since F1.
 """
 import os
 import re
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QListWidget,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -34,9 +36,9 @@ def validate_file(name: str, size_bytes: int) -> str:
     if size_bytes > MAX_MB * 1024 * 1024:
         return (
             f"{name} is {size_bytes / 1048576:.1f} MB — files up to {MAX_LABEL} "
-            f"are accepted. Try a sample capture below."
+            f"are accepted. Try a synthetic reference below."
         )
-    return f"{name} passed validation. Open a sample capture below to explore the full analysis."
+    return f"{name} passed validation. Ingesting for live analysis…"
 
 
 class FilePanel(QWidget):
@@ -54,7 +56,7 @@ class FilePanel(QWidget):
         drop_group = QGroupBox("Capture", self)
         drop_group.setObjectName("dropGroup")
         drop_layout = QVBoxLayout(drop_group)
-        self.drop_label = QLabel("Drop an .iq, .wav or .bin file here, or click Browse.\nUp to 2 GB (memmap).", drop_group)
+        self.drop_label = QLabel("▼ DROP any .iq / .wav / .bin here, or Browse ▼\nUp to 2 GB (memmap) • analyzed locally, full report.", drop_group)
         self.drop_label.setObjectName("dropLabel")
         self.drop_label.setAlignment(Qt.AlignCenter)
         self.drop_label.setStyleSheet("color: #94a3b8; padding: 16px;")
@@ -129,20 +131,84 @@ class FilePanel(QWidget):
         re_form.addRow(self.reanalyze_btn)
         layout.addWidget(re_group)
 
-        # Sample captures
-        samples_group = QGroupBox("Sample captures", self)
+        # Sample captures (live-synthesized references since F1)
+        samples_group = QGroupBox("Synthetic references (live)", self)
         samples_group.setObjectName("samplesGroup")
         samples_layout = QVBoxLayout(samples_group)
         self.sample_buttons: dict[str, QPushButton] = {}
         for demo_id in DEMO_IDS:
             mod, desc = SAMPLE_META[demo_id]
-            btn = QPushButton(f"{mod}\n{desc}", samples_group)
+            btn = QPushButton(f"{mod} (live)\n{desc}", samples_group)
             btn.setObjectName(f"sampleButton_{demo_id}")
             btn.clicked.connect(lambda _=False, d=demo_id: self.sample_selected.emit(d))
             samples_layout.addWidget(btn)
             self.sample_buttons[demo_id] = btn
         layout.addWidget(samples_group)
+
+        # History (local SQLite, offline) — list + refresh, no network.
+        hist_group = QGroupBox("History (local, offline)", self)
+        hist_group.setObjectName("historyGroup")
+        hist_layout = QVBoxLayout(hist_group)
+        self.history_list = QListWidget(hist_group)
+        self.history_list.setObjectName("historyList")
+        self.history_list.setMaximumHeight(140)
+        self.history_list.setStyleSheet(
+            "QListWidget#historyList { background: rgba(0,0,0,0.4); color: #6ee7b7; "
+            "font-family: monospace; font-size: 11px; border: 1px solid #1e293b; }"
+        )
+        self.history_detail = QLabel("no runs yet — analyze a capture", hist_group)
+        self.history_detail.setObjectName("historyDetail")
+        self.history_detail.setWordWrap(True)
+        self.history_detail.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        self.history_refresh_btn = QPushButton("Refresh", hist_group)
+        self.history_refresh_btn.setObjectName("historyRefreshButton")
+        self.history_refresh_btn.clicked.connect(lambda: self.refresh_history())
+        self.history_list.itemClicked.connect(self._show_history_detail)
+        hist_layout.addWidget(self.history_list)
+        hist_layout.addWidget(self.history_detail)
+        hist_layout.addWidget(self.history_refresh_btn)
+        layout.addWidget(hist_group)
+        self._history_db: str | None = None
+        self._history_rows: list = []
         layout.addStretch(1)
+
+    def refresh_history(self, db_path: str | None = None) -> int:
+        """Reload the local history list. Returns row count (0 when empty/missing)."""
+        from engine.history import list_runs
+
+        if db_path is not None:
+            self._history_db = db_path
+        path = self._history_db
+        if not path:
+            from engine.history import default_db_path
+
+            path = default_db_path()
+            self._history_db = path
+        try:
+            rows = list_runs(path, limit=100)
+        except Exception:
+            rows = []
+        self._history_rows = rows
+        self.history_list.clear()
+        for r in rows:
+            self.history_list.addItem(
+                f"#{r['id']} {r['modulation']} {r['confidence']:.2f} · {r['filename']} · {r['ts']}"
+            )
+        if rows:
+            self.history_detail.setText(f"{len(rows)} run(s) — click for details (local only)")
+        else:
+            self.history_detail.setText("no runs yet — analyze a capture")
+        return len(rows)
+
+    def _show_history_detail(self, item) -> None:
+        idx = self.history_list.row(item)
+        if 0 <= idx < len(self._history_rows):
+            r = self._history_rows[idx]
+            self.history_detail.setText(
+                f"#{r['id']} {r['filename']} · {r['modulation']} @ {r['confidence']:.2f} · "
+                f"SNR {r['snr']:.1f}dB BW {r['bw']:.0f}Hz sr {r['symbol_rate']} · "
+                f"sha {str(r['sha256'])[:12]}… · {r['source']}"
+            )
 
     def show_message(self, text: str) -> None:
         self.validation_msg.setText(text)

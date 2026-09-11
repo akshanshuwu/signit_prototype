@@ -1,7 +1,10 @@
 """Demo store — frozen contract mirror of prototype lib/demo.ts.
 
-Loads the 4 precomputed JSONs bundled in assets/demo/ (offline fallback
-and Phase 1 data source until the real engine lands in Phases 2-5).
+Offline fallback + smoke seed only (F1+): the 4 precomputed JSONs bundled
+in assets/demo/ are NOT the primary path. Normal flow is live:
+ingest/synth -> engine chain -> to_demo_dict. Use load_demo() only for
+explicit fallback when the live chain cannot produce a view, and
+validate_demo() as the contract checker (also used by intel_pdf).
 Works both in dev and inside a PyInstaller bundle (sys._MEIPASS).
 """
 from __future__ import annotations

@@ -4,8 +4,9 @@
 Build on Windows:  pyinstaller production/signit.spec
 Output: dist/SIGNIT.exe (console-less GUI).
 
-Bundles the 4 demo captures (assets/demo) so Sample analysis works
-offline. ml/models/signit_cnn.onnx is bundled WHEN PRESENT — train it
+Bundles the 4 demo captures (assets/demo) as offline fallback/smoke seed
+only (F1+: primary path is live ingest/synth -> engine chain).
+ml/models/signit_cnn.onnx is bundled WHEN PRESENT — train it
 first (.train-venv, see README) for a live CNN vote in the .exe; the app
 falls back to pending-vote when absent.
 Hidden imports cover everything PyInstaller cannot see statically
@@ -41,6 +42,8 @@ a = Analysis(
         "engine.estimators",
         "engine.demod",
         "engine.fec",
+        "engine.history",
+        "engine.reanalyze",
         "ml.cumulants",
         "ml.ensemble",
         "ml.cnn_onnx",

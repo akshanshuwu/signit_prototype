@@ -1,9 +1,13 @@
-"""Ops-console main window (Phase 1).
+"""Ops-console main window.
 
 Layout: header bar (S badge + SIGNIT + nav) on top; horizontal splitter
 with left FilePanel / center ResultsTabs / right ReportCard; Mission Log
-docked at the bottom. Selecting a sample loads the bundled demo JSON into
-all tabs + right report + log (web results-page parity).
+docked at the bottom.
+
+Primary path (F1+): live chain — ingest/synth -> estimators -> demod ->
+ML vote -> FEC -> to_demo_dict. Startup shows an empty drop-prompt state
+(no auto-loaded demo). Bundled demo JSONs are fallback-only via
+open_demo() when the live chain cannot produce a view.
 """
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -31,6 +35,43 @@ APP_OBJECT_NAME = "SignitMainWindow"
 
 STAGES = ("ingest", "est", "demod", "vote", "fec")
 
+# Sample-button key -> modulation label for live synthesis (ml/synth.py).
+SYNTH_MAP = {"bpsk": "BPSK", "qpsk": "QPSK", "qam16": "16QAM", "fsk2": "2FSK"}
+
+EMPTY_LINES = (
+    "READY — drop any .iq / .wav / .bin capture (up to 2 GB) for full local analysis",
+    "no file handy? pick a synthetic reference below (live DSP, no bundled plots)",
+    "100% offline • local history • sha256 chain-of-custody on every run",
+)
+EMPTY_PROMPT = EMPTY_LINES[0]
+
+
+def _empty_demo() -> dict:
+    """Contract-valid empty view (zeros) so tabs render without a live result."""
+    zeros_psd = [0.0] * 512
+    times = [float(i * 0.001) for i in range(64)]
+    freqs = [float((i - 64) * 375.0) for i in range(128)]
+    z = [[0.0] * 64 for _ in range(128)]
+    lags = list(range(256))
+    vals = [0.0] * 256
+    return {
+        "meta": {"modulation": "UNKNOWN", "fs": 0, "symbol_rate": 0,
+                 "snr_db": 0.0, "center_freq": 0, "file": "—"},
+        "predictions": {"modulation": "UNKNOWN", "confidence": 0.0,
+                        "votes": {"CNN": 0.0, "cumulants": "pending"},
+                        "fs_est": 0, "symbol_rate_est": 0,
+                        "bw_est": 0.0, "snr_est": 0.0},
+        "psd": {"freqs": list(range(512)), "mags_db": zeros_psd},
+        "spectrogram": {"times": times, "freqs": freqs, "z_db": z},
+        "constellation": {"i": [0.0], "q": [0.0]},
+        "bits_preview": {"hex": "—", "ascii": "—",
+                         "corr_peak": {"lag": 0, "value": 0.0,
+                                       "lags": lags, "vals": vals}},
+        "comparator": {"iq_snr": 0.0, "wav_snr": 0.0,
+                       "note": "no capture yet — ingest a file for measured SNR"},
+        "log": [EMPTY_PROMPT],
+    }
+
 
 def tick_line(done: list[str], failed: list[str] | None = None) -> str:
     """One-click Auto-Chain summary: per-stage ✓/✗ ticks for the mission log."""
@@ -41,7 +82,7 @@ def tick_line(done: list[str], failed: list[str] | None = None) -> str:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, history_db: str | None = None):
         super().__init__(parent)
         self.setObjectName(APP_OBJECT_NAME)
         self.setWindowTitle(APP_TITLE)
@@ -49,6 +90,8 @@ class MainWindow(QMainWindow):
         self._demo_id: str | None = None
         self._demo: dict | None = None  # last demo dict shown (for PDF export)
         self._ingest = None  # last IngestResult (for ROI/impairment re-analysis)
+        self._source: str = "empty"  # "empty" | "live" | "synth" | "fallback"
+        self._history_db: str | None = history_db  # None = default local DB
 
         root = QWidget(self)
         root.setObjectName("rootWidget")
@@ -68,7 +111,9 @@ class MainWindow(QMainWindow):
             "background: #10b981; color: #020617; font-weight: 900; "
             "font-size: 14px; padding: 2px 8px; border-radius: 4px;"
         )
-        title = QLabel("SIGNIT  <span style='color:#64748b;'>RF Signal Analyzer</span>", header)
+        title = QLabel(
+            "SIGNIT  <span style='color:#10b981;'>// RF SIGNAL ANALYZER</span>  "
+            "<span style='color:#475569;'>OFFLINE • LOCAL • DRDO-GRADE</span>", header)
         title.setObjectName("brandTitle")
         title.setStyleSheet("font-weight: bold; font-size: 13px; color: #f1f5f9;")
         header_layout.addWidget(badge)
@@ -78,7 +123,7 @@ class MainWindow(QMainWindow):
         self.nav_analyzer_btn.setObjectName("navAnalyzerButton")
         self.nav_sample_btn = QPushButton("Sample analysis", header)
         self.nav_sample_btn.setObjectName("navSampleButton")
-        self.nav_sample_btn.clicked.connect(lambda: self.open_demo("qpsk"))
+        self.nav_sample_btn.clicked.connect(lambda: self.open_synthetic_reference("qpsk"))
         self.pdf_btn = QPushButton("Export PDF", header)
         self.pdf_btn.setObjectName("exportPdfButton")
         self.pdf_btn.clicked.connect(self._export_pdf)
@@ -102,7 +147,7 @@ class MainWindow(QMainWindow):
         splitter.setObjectName("mainSplitter")
 
         self.file_panel = FilePanel(splitter)
-        self.file_panel.sample_selected.connect(self.open_demo)
+        self.file_panel.sample_selected.connect(self.open_synthetic_reference)
         self.file_panel.file_ingested.connect(self._on_ingested)
         self.file_panel.reanalyze_requested.connect(
             lambda spec: self.reanalyze(spec.get("t0_s"), spec.get("t1_s"),
@@ -129,17 +174,81 @@ class MainWindow(QMainWindow):
         self.mission_log.setMaximumHeight(140)
         root_layout.addWidget(self.mission_log)
 
-        self.setStyleSheet("QMainWindow { background: #020617; } QLabel { color: #e2e8f0; }")
+        self.setStyleSheet(
+            "QMainWindow { background: #020617; }"
+            "QLabel { color: #e2e8f0; }"
+            "QGroupBox { color: #67e8f9; border: 1px solid #1e293b; border-radius: 6px;"
+            " margin-top: 12px; padding-top: 6px; font-weight: bold; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px; }"
+            "QPushButton { background: #0f172a; color: #e2e8f0; border: 1px solid #1e293b;"
+            " border-radius: 6px; padding: 8px; text-align: left; }"
+            "QPushButton:hover { border-color: #10b981; }"
+            "QTabWidget::pane { border: 1px solid #1e293b; }"
+            "QTabBar::tab { background: #0f172a; color: #94a3b8; padding: 6px 12px; }"
+            "QTabBar::tab:selected { background: #10b981; color: #020617; font-weight: bold; }"
+        )
 
-        # Default view mirrors web CTA: sample analysis (qpsk).
-        self.open_demo("qpsk")
+        # Default view: empty drop-prompt (live primary; no auto-loaded demo).
+        self._show_empty_state()
+        try:
+            self.file_panel.refresh_history(self.history_db_path())
+        except Exception:
+            pass
 
     @property
     def demo_id(self) -> str | None:
         return self._demo_id
 
+    def _show_empty_state(self) -> None:
+        """Empty drop-prompt view: contract-valid zeros, no demo loaded."""
+        demo = _empty_demo()
+        self.error_banner.hide()
+        self._demo_id = None
+        self._demo = None
+        self._ingest = None
+        self._source = "empty"
+        self.setWindowTitle(APP_TITLE)
+        self.results_tabs.set_demo(demo)
+        self.side_report.set_data(demo)
+        self.mission_log.set_lines(list(EMPTY_LINES))
+
+    def open_synthetic_reference(self, demo_id: str) -> bool:
+        """Live-synthesized reference: synth(mod) -> real chain (not load_demo).
+
+        Keeps the one-click sample UX offline without touching the bundled
+        JSONs. Returns False + banner on unknown id.
+        """
+        if demo_id not in SYNTH_MAP:
+            self.error_banner.setText(
+                f'Unknown capture "{demo_id}". Open one of bpsk / qpsk / qam16 / fsk2.'
+            )
+            self.error_banner.show()
+            return False
+        from ml.synth import FS, synth
+
+        from engine.ingest import IngestResult
+
+        mod = SYNTH_MAP[demo_id]
+        preview = synth(mod, 15.0, 7)
+        ingest_view = IngestResult(
+            path=f"synth://{demo_id}.iq", kind="iq",
+            n_samples=len(preview), fs=int(FS), fc=0.0,
+            dtype_label="synth-live", sha256="synth",
+            preview=preview.astype(np.complex64),
+        )
+        self._ingest = ingest_view
+        self._source = "synth"
+        self._run_chain(preview, int(FS), 0.0, f"synth:{demo_id}.iq",
+                        [f"synthetic reference {mod} @ 15 dB (live chain)"],
+                        kind="iq", sha256="synth", path=f"synth://{demo_id}.iq")
+        return True
+
     def open_demo(self, demo_id: str) -> bool:
-        """Load a demo into every panel. Returns False + red banner on unknown id."""
+        """Fallback-only: load a bundled demo JSON into every panel.
+
+        Not used in normal flow. Use when the live chain cannot produce a
+        view or for explicit offline comparison. Returns False + banner.
+        """
         try:
             demo = load_demo(demo_id)
         except ValueError as exc:
@@ -154,11 +263,13 @@ class MainWindow(QMainWindow):
         self._demo_id = demo_id
         self._demo = demo
         self._ingest = None
-        self.setWindowTitle(f"{APP_TITLE} · {demo_id.upper()}")
+        self._source = "fallback"
+        self.setWindowTitle(f"{APP_TITLE} · {demo_id.upper()} (bundled fallback)")
         self.results_tabs.set_demo(demo)
         self.side_report.set_data(demo)
         self.mission_log.set_lines(
-            list(demo.get("log", [])) + [tick_line(["ingest", "est", "demod", "vote", "fec"])]
+            [f"fallback: bundled {demo_id} (live chain not used)"]
+            + list(demo.get("log", [])) + [tick_line(["ingest", "est", "demod", "vote", "fec"])]
         )
         return True
 
@@ -166,9 +277,9 @@ class MainWindow(QMainWindow):
         return DEMO_IDS
 
     def export_pdf_to(self, path: str) -> str:
-        """Write the Intel PDF for the currently shown demo. Returns path."""
+        """Write the Intel PDF for the currently shown result. Returns path."""
         if self._demo is None:
-            raise ValueError("nothing to export — open a sample or ingest a file first")
+            raise ValueError("nothing to export — ingest a file or pick a synthetic reference first")
         from app.intel_pdf import write_intel_pdf
 
         log = [line[2:] if line.startswith("$ ") else line for line in self.mission_log.toPlainText().splitlines()]
@@ -190,11 +301,43 @@ class MainWindow(QMainWindow):
             self.error_banner.setText(f"pdf export failed: {exc}")
             self.error_banner.show()
 
+    def history_db_path(self) -> str:
+        """Resolved local history DB path (override or platform default)."""
+        if self._history_db:
+            return self._history_db
+        from engine.history import default_db_path
+
+        return default_db_path()
+
+    def _record_history(self, demo: dict, ingest_view) -> str | None:
+        """Persist one history row. Returns warn line on failure, else None."""
+        try:
+            from engine.history import record_run
+
+            meta, pred = demo["meta"], demo["predictions"]
+            record_run(self.history_db_path(), {
+                "filename": str(meta.get("file", "—")),
+                "sha256": str(getattr(ingest_view, "sha256", "")),
+                "fs": int(meta.get("fs", 0)),
+                "fc": float(meta.get("center_freq", 0.0)),
+                "kind": str(getattr(ingest_view, "kind", "iq")),
+                "modulation": str(pred.get("modulation", "UNKNOWN")),
+                "confidence": float(pred.get("confidence", 0.0)),
+                "snr": float(pred.get("snr_est", 0.0)),
+                "bw": float(pred.get("bw_est", 0.0)),
+                "symbol_rate": int(pred.get("symbol_rate_est", 0)),
+                "source": self._source,
+            })
+            return None
+        except Exception as exc:  # history must never break the chain
+            return f"history warn: {exc}"
+
     def _on_ingested(self, result) -> None:
         """Phase 6: estimators + demod + ML vote + FEC assessment; report shows ensemble winner."""
         from engine.ingest import log_lines
 
         self._ingest = result
+        self._source = "live"
         self._run_chain(result.preview, result.fs, result.fc,
                         os.path.basename(result.path), log_lines(result),
                         kind=result.kind, sha256=result.sha256,
@@ -260,13 +403,20 @@ class MainWindow(QMainWindow):
         demo = to_demo_dict(est, ingest_view, demod=demod, vote=vote, fec=fec)
         self._demo_id = None
         self._demo = demo
+        # _source is set by the caller (live/synth); reanalyze preserves it.
         self.setWindowTitle(f"{APP_TITLE} · {title_label}")
         self.results_tabs.set_demo(demo)
         self.side_report.set_data(demo)
+        history_warn = self._record_history(demo, ingest_view)
         self.mission_log.set_lines(
             list(base_lines) + estimator_log_lines(est) + demod_lines + ml_lines + fec_lines
+            + ([history_warn] if history_warn else [])
             + [tick_line(done, failed)]
         )
+        try:
+            self.file_panel.refresh_history(self.history_db_path())
+        except Exception:
+            pass
 
     def reanalyze(self, t0_s: float | None = None, t1_s: float | None = None,
                   snr_db: float | None = None, freq_offset_hz: float = 0.0) -> bool:
