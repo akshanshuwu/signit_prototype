@@ -403,7 +403,7 @@ def assess_bits(bits: np.ndarray) -> FECResult:
     b = np.asarray(bits, dtype=np.uint8).ravel()
     if len(b) < 64:
         return FECResult(note=f"only {len(b)} bits — fec abstains")
-    best = FECResult(note="no RS/Viterbi structure found")
+    best = FECResult(note="no RS/Viterbi structure found (scope: RS + conv/Viterbi only; LDPC roadmap)")
     best_key = (2, 10**9, 0)
     lines: list[str] = []
     for dname, dfn in DEINT_CANDIDATES:
@@ -468,7 +468,7 @@ def assess_bits(bits: np.ndarray) -> FECResult:
                 best.scheme, best.deint = f"Viterbi-K{K}", dname
     best.ranking = lines
     if best.status == "NONE":
-        best.note = "no RS/Viterbi structure found"
+        best.note = "no RS/Viterbi structure found (scope: RS + conv/Viterbi only; LDPC roadmap)"
     return best
 
 
@@ -480,7 +480,13 @@ def fec_log_lines(f: FECResult) -> list[str]:
         ]
     if f.status == "STRUCTURE":
         return [f"fec: STRUCTURE hint — {f.note}"]
-    return [f"fec: NONE — {f.note}"]
+    try:
+        st = backend_status()
+        acc = ",".join(m for m in ("galois", "commpy", "pyldpc") if st.get(m))
+        be = f"backends: builtin RS/Viterbi + {acc}" if acc else "backends: builtin RS/Viterbi (optionals absent)"
+    except Exception:
+        be = "backends: builtin RS/Viterbi"
+    return [f"fec: NONE — {f.note}", be]
 
 
 def backend_status() -> dict:

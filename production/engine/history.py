@@ -1,6 +1,6 @@
-"""Local history store — F2 (functional core, no widgets yet).
+"""History store — one row per analyzed file.
 
-SQLite, local-only, offline. One row per successful live/synth chain run.
+SQLite, no network. One row per successful chain run.
 History failure must never break the analysis chain (callers wrap in
 try/except and log "history warn: ...").
 

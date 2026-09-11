@@ -1,9 +1,9 @@
-"""Intel PDF report — Phase 7 (one-click, offline).
+"""Intel PDF report — one-click export.
 
-Renders a demo dict (bundled sample or live ingest result) into a
-single-file PDF: header + modulation verdict + estimates + voter
-breakdown + bits preview + comparator + mission log. Pure function over
-the frozen demo contract — no Qt, no network.
+Renders a live ingest result into a single-file PDF: header + modulation
+verdict + estimates + voter breakdown + bits preview + comparator +
+mission log. Pure function over the frozen result contract — no Qt,
+no network.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def _lines(demo: dict, log: list[str] | None = None) -> list[tuple[str, str]]:
     meta, pred = demo["meta"], demo["predictions"]
     out: list[tuple[str, str]] = [
         ("h1", "SIGNIT — Signal Intelligence Report"),
-        ("body", f"Generated (local, offline): {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"),
+        ("body", f"Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"),
         ("body", f"File: {meta['file']} · fs {meta['fs']} Hz · center {meta.get('center_freq', 0)} Hz"),
         ("h2", "Verdict"),
         ("body", f"Modulation: {pred['modulation']} @ {pred['confidence']:.2f} confidence"),

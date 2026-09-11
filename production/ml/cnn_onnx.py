@@ -28,6 +28,15 @@ IMG = 64
 
 
 def model_path() -> str:
+    # Frozen exe: model is bundled as ml/models/signit_cnn.onnx under _MEIPASS
+    # (see signit.spec model_datas). Dev: ml/models/ next to this file.
+    try:
+        from app.demo_store import resource_path
+        bundled = resource_path("ml", "models", "signit_cnn.onnx")
+        if os.path.isfile(bundled):
+            return bundled
+    except Exception:
+        pass
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "signit_cnn.onnx")
 
 

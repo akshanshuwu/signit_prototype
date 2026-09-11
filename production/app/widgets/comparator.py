@@ -38,6 +38,11 @@ class Comparator(QWidget):
         cards.addWidget(wav_title, 0, 1)
         cards.addWidget(self.wav_value, 1, 1)
         cards.addWidget(self.wav_bar, 2, 1)
+        # Narrow sidebar: let both cards share width so values don't elide.
+        cards.setColumnStretch(0, 1)
+        cards.setColumnStretch(1, 1)
+        self.iq_value.setWordWrap(True)
+        self.wav_value.setWordWrap(True)
 
         self.note = QLabel("", self)
         self.note.setObjectName("comparatorNote")

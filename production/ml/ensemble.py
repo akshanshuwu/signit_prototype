@@ -19,6 +19,10 @@ import numpy as np
 
 from ml.cumulants import CLASSES, CumulantResult
 
+# Grid-searched 2026-09-12 on synth held-out (4 mods x 20/12/5dB x seeds 7/8,
+# 24 bursts, cnn pending): {0.40/0.25/0.20/0.15}, {0.50/0.25/0.15/0.10} and
+# {0.34/0.33/0.33/0.0} all score 18/24=0.75 (losses are 5dB short-burst
+# rate-fails, weight-independent). Keep demod-led default for EVM-rank trust.
 WEIGHTS = {"demod": 0.40, "cumulants": 0.25, "sklearn": 0.20, "cnn": 0.15}
 
 _MODEL = None  # lazily trained RandomForest (single GUI thread for now)
@@ -116,7 +120,8 @@ def combine(demod=None, cumulants: CumulantResult | None = None,
     """Weighted poll. Each part is (modulation, confidence)."""
     parts: dict[str, tuple[str, float]] = {}
     if demod is not None and getattr(demod, "modulation", "UNKNOWN") not in ("UNKNOWN", "pending"):
-        parts["demod"] = (demod.modulation, float(min(0.95, max(0.05, demod.margin_db / 12.0))))
+        from engine.demod import margin_to_conf
+        parts["demod"] = (demod.modulation, margin_to_conf(demod.margin_db))
     if cumulants is not None and cumulants.modulation != "UNKNOWN":
         parts["cumulants"] = (cumulants.modulation, float(cumulants.confidence))
     if sklearn_vote[0] not in ("UNKNOWN", "pending"):

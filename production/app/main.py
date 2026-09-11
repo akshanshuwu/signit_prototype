@@ -36,7 +36,7 @@ def create_app(argv: list[str] | None = None) -> QApplication:
 
 
 def _maybe_splash(app) -> object | None:
-    """DRDO-style loading splash. Skipped offscreen (tests/CI/smoke)."""
+    """Loading splash. Skipped offscreen (tests/CI/smoke)."""
     import os
 
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
@@ -54,11 +54,10 @@ def _maybe_splash(app) -> object | None:
         p.drawText(28, 80, "SIGNIT")
         p.setPen(QColor("#67e8f9"))
         p.setFont(QFont("monospace", 11))
-        p.drawText(28, 112, "RF SIGNAL ANALYZER  //  OFFLINE • LOCAL")
+        p.drawText(28, 112, "RF SIGNAL ANALYZER")
         p.setPen(QColor("#64748b"))
         p.setFont(QFont("monospace", 10))
-        p.drawText(28, 150, "loading DSP chain … estimators • demod • ML vote • FEC")
-        p.drawText(28, 180, "no network  •  local history  •  chain-of-custody hash")
+        p.drawText(28, 150, "loading … estimators • demod • ML vote • FEC")
         p.end()
         splash = QSplashScreen(pix, Qt.WindowStaysOnTopHint)
         splash.setObjectName("signitSplash")
@@ -79,7 +78,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-splash", action="store_true", help="skip loading splash")
     args = parser.parse_args(argv)
 
-    app = create_app(sys.argv if argv is None else [sys.argv[0], *argv] if argv else sys.argv)
+    # Qt must only see the program name: app flags (--smoke/--history-db)
+    # are argparse-owned, unknown args make QApplication warn/fail.
+    app = create_app([sys.argv[0]])
     splash = None if (args.no_splash or args.smoke) else _maybe_splash(app)
     win = MainWindow(history_db=args.history_db)
     win.show()
@@ -91,24 +92,30 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
     if args.smoke:
-        # F3 smoke: live cycle — synth reference through the real chain,
-        # every tab offscreen. Plus one fallback sanity check.
+        # Smoke: temp .iq files through the REAL ingest + chain, every
+        # tab offscreen. No synth buttons, no bundled demos — file ingest
+        # is the only path.
+        import os
+        import tempfile
+
         from app.demo_store import validate_demo
-        from app.mainwindow import SYNTH_MAP
         from app.widgets.results_tabs import TAB_ORDER
+        from engine.ingest import ingest_file
+        from ml.synth import FS, synth
 
         app.processEvents()
-        for demo_id in SYNTH_MAP:
-            ok = win.open_synthetic_reference(demo_id)
+        tmp = tempfile.mkdtemp(prefix="signit_smoke_")
+        for mod in ("BPSK", "QPSK", "16QAM", "2FSK"):
+            path = os.path.join(tmp, f"smoke_{mod.lower()}.iq")
+            synth(mod, 15.0, 7).tofile(path)
+            win._on_ingested(ingest_file(path, fs=int(FS)))
             app.processEvents()
             for index in range(len(TAB_ORDER)):
                 win.results_tabs.setCurrentIndex(index)
                 app.processEvents()
             errs = validate_demo(win._demo) if win._demo else ["no demo"]
-            print(f"SMOKE live={demo_id} ok={ok} valid={errs == []} tabs={len(TAB_ORDER)} mod={win.side_report.mod_label.text()}")
-            assert ok and errs == [], f"smoke live {demo_id} failed: {errs}"
-        fb = win.open_demo("qpsk")
-        print(f"SMOKE fallback=qpsk ok={fb}")
+            print(f"SMOKE live={mod.lower()} valid={errs == []} tabs={len(TAB_ORDER)} mod={win.side_report.mod_label.text()}")
+            assert win._source == "live" and errs == [], f"smoke live {mod} failed: {errs}"
         print(f"SMOKE OK: {win.windowTitle()} theme applied, size={win.size().width()}x{win.size().height()}")
         return 0
     return app.exec()

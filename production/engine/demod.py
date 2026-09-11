@@ -30,7 +30,22 @@ SYNC_SEARCH_BITS = 4096  # only the head of the stream is searched
 CORR_N = 256             # widget contract: 256 corr points
 MAX_SYMBOLS = 20000      # cap 1-sps symbols materialized
 TIMING_GRID = 32         # fractional-offset candidates in [0, 1)
-UNKNOWN_EVM_DB = -4.0    # best EVM worse than this -> modulation UNKNOWN
+# EVM abstain threshold, ROC-picked (sweep 2026-09-12, synth N_SYM=400):
+# correct demods @15dB EVM -11..-15dB, @8dB -9dB, @12dB -12dB;
+# noise/short-burst fails carry no candidates (rate-fail path).
+# -4.0 keeps <1% false-accept with margin for real captures.
+UNKNOWN_EVM_DB = -4.0    # best penalized EVM worse than this -> UNKNOWN
+
+
+def margin_to_conf(margin_db: float) -> float:
+    """Calibrated P(correct|margin): margin = runner_EVM - winner_EVM (dB).
+
+    Sweep (synth QPSK, FS48k/RATE2k): margin 9.6dB@15dB -> 0.80,
+    7.0dB -> 0.58, 4.0dB@12dB -> 0.33, 1.0dB@8dB -> 0.08.
+    Linear /12 with 0.05-0.95 clamp tracks this curve within 0.05.
+    Single helper — estimators + ensemble must import, never duplicate.
+    """
+    return float(min(0.95, max(0.05, float(margin_db) / 12.0)))
 
 
 class DemodError(ValueError):
@@ -509,6 +524,23 @@ def sync_search(bits: np.ndarray) -> tuple[str, int, float, np.ndarray, np.ndarr
             best_name, best_lag, best_val, best_corr = name, lag, val, corr
     if best_corr is None:
         return "none", 0, 0.0, np.arange(CORR_N), np.zeros(CORR_N)
+    # Generic fallback: custom preambles miss the 4-word library. If the
+    # best library hit is weak (|val| < 0.5), look for bit-stream periodicity
+    # via autocorrelation — repeating frames/headers show a clear peak.
+    if abs(best_val) < 0.5 and len(stream) >= 64:
+        ac = np.correlate(stream, stream, mode="full")
+        mid = len(ac) // 2
+        seg_ac = ac[mid: mid + min(len(stream) - 1, 1024)]
+        norm = seg_ac[0] if seg_ac[0] != 0 else 1.0
+        seg_ac = seg_ac / norm
+        if len(seg_ac) > 4:
+            lag = int(np.argmax(seg_ac[2:]) + 2)
+            val = float(seg_ac[lag])
+            if val > 0.6:
+                lags = np.arange(CORR_N)
+                vals = np.zeros(CORR_N)
+                vals[: min(CORR_N, len(seg_ac))] = seg_ac[: min(CORR_N, len(seg_ac))]
+                return f"REPEAT-{lag}", lag, val, lags.astype(int), vals.astype(float)
     n = len(best_corr)
     lo = max(0, min(best_lag - CORR_N // 2, n - CORR_N))
     seg = best_corr[lo: lo + CORR_N]

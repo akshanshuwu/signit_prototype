@@ -43,15 +43,13 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m app.main --smoke --history-db /tmp
 ## What to check
 
 1. Splash `SIGNIT // RF SIGNAL ANALYZER` flashes, then an empty READY state
-   (3-line prompt in Mission Log, report shows `UNKNOWN`).
-2. Click `QPSK (live)` → title `synth:qpsk.iq`, measured QPSK + confidence,
+   (prompt in Mission Log, report shows `UNKNOWN`).
+2. Drop any `.iq/.wav/.bin` → all 6 tabs fill with measured data,
    `auto-chain:` ticks, History panel `0 → 1` row.
-3. Drop any `.iq/.wav/.bin` (or make one: synth a burst to `/tmp/real.iq`
-   and Browse to it) → all 6 tabs fill with measured data, history grows.
-4. Click a history row → detail line (mod/conf/SNR/BW/sha/source).
-5. `Export PDF` writes a local report.
-6. Prove not-hardcoded: quit, rename `assets/demo/` aside, relaunch —
-   everything above still works (only explicit fallback needs the JSONs).
+3. Click a history row → detail line (mod/conf/SNR/BW/sha/source).
+4. `Export PDF` writes a report.
+5. Maximize / fullscreen → center tabs take the extra space, sidebars keep
+   width, no overlap or collapsed panels.
 
 Default history DB (when `--history-db` is omitted): `~/.signit/history.db`
 (Windows `.exe` uses `%APPDATA%/SIGNIT/history.db`).

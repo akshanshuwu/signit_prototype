@@ -30,10 +30,15 @@ def test_tick_line_marks_stages():
     assert "demod ✗" in line2 and "est ✓" in line2
 
 
-def test_open_demo_shows_tick_line():
+def test_ingest_chain_shows_tick_line(tmp_path):
     _app, win = _make_window()
     try:
-        assert win.open_demo("qpsk") is True
+        from engine.ingest import ingest_file as _ingest
+
+        x = synth("QPSK", 20.0, 46)
+        p = tmp_path / "qpsk.iq"
+        x.tofile(p)
+        win._on_ingested(_ingest(str(p), fs=FS))
         assert "auto-chain:" in win.mission_log.toPlainText()
     finally:
         win.close()
@@ -68,21 +73,40 @@ def test_explain_vote_shares():
     assert any("voter shares" in line for line in lines)
 
 
-def test_report_card_shows_explain():
+def test_report_card_shows_explain(tmp_path):
     _app, win = _make_window()
     try:
-        assert win.open_demo("bpsk") is True
+        from engine.ingest import ingest_file as _ingest
+
+        x = synth("BPSK", 20.0, 45)
+        p = tmp_path / "bpsk.iq"
+        x.tofile(p)
+        win._on_ingested(_ingest(str(p), fs=FS))
         assert win.side_report.explain.text().startswith("AI:")
     finally:
         win.close()
 
 
 def test_intel_pdf_writes(tmp_path):
-    from app.demo_store import load_demo
     from app.intel_pdf import write_intel_pdf
+    from engine.demod import demodulate_preview
+    from engine.estimators import analyze_preview, to_demo_dict
+    from engine.ingest import IngestResult, ingest_file
+    from ml.ensemble import run_ml_vote
 
+    x = synth("QPSK", 20.0, 44)
+    p = tmp_path / "qpsk.iq"
+    x.tofile(p)
+    res = ingest_file(str(p), fs=FS)
+    est = analyze_preview(res.preview, FS, 0.0)
+    demod = demodulate_preview(res.preview, FS)
+    _cum, vote, _cnn, _lines = run_ml_vote(res.preview, FS, demod)
+    view = IngestResult(path=str(p), kind="iq", n_samples=len(res.preview),
+                        fs=FS, fc=0.0, dtype_label="t", sha256="t",
+                        preview=res.preview)
+    demo = to_demo_dict(est, view, demod=demod, vote=vote)
     out = str(tmp_path / "intel.pdf")
-    write_intel_pdf(load_demo("qpsk"), out, ["ingest ok", "ml vote: QPSK"])
+    write_intel_pdf(demo, out, ["ingest ok", "ml vote: QPSK"])
     with open(out, "rb") as f:
         head = f.read(5)
     assert head == b"%PDF-"
@@ -92,7 +116,12 @@ def test_intel_pdf_writes(tmp_path):
 def test_export_pdf_from_window(tmp_path):
     _app, win = _make_window()
     try:
-        assert win.open_demo("qpsk") is True
+        from engine.ingest import ingest_file as _ingest
+
+        x = synth("QPSK", 20.0, 44)
+        p = tmp_path / "qpsk.iq"
+        x.tofile(p)
+        win._on_ingested(_ingest(str(p), fs=FS))
         out = str(tmp_path / "win.pdf")
         win.export_pdf_to(out)
         assert os.path.getsize(out) > 1000

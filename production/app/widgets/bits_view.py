@@ -31,11 +31,16 @@ class BitsView(QWidget):
         grid.addWidget(ascii_title, 0, 1)
         grid.addWidget(self.hex_view, 1, 0)
         grid.addWidget(self.ascii_view, 1, 1)
+        # Fullscreen: hex/ascii panes grow instead of staying one line tall.
+        grid.setRowStretch(1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
         self.peak_label = QLabel("", self)
         self.peak_label.setObjectName("corrPeakLabel")
         self.peak_label.setStyleSheet("color: #64748b; font-size: 11px;")
         self.corr_plot = CorrPeakWidget(self)
+        self.corr_plot.setMinimumHeight(120)
 
         layout.addLayout(grid)
         layout.addWidget(self.peak_label)

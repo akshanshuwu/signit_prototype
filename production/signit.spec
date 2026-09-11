@@ -4,8 +4,7 @@
 Build on Windows:  pyinstaller production/signit.spec
 Output: dist/SIGNIT.exe (console-less GUI).
 
-Bundles the 4 demo captures (assets/demo) as offline fallback/smoke seed
-only (F1+: primary path is live ingest/synth -> engine chain).
+File ingest is the only analysis path — no bundled demos.
 ml/models/signit_cnn.onnx is bundled WHEN PRESENT — train it
 first (.train-venv, see README) for a live CNN vote in the .exe; the app
 falls back to pending-vote when absent.
@@ -20,17 +19,17 @@ SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
 PROD_DIR = SPEC_DIR  # spec lives in production/
 ENTRY = os.path.join(PROD_DIR, "app", "main.py")
 
-demo_datas = [(p, "assets/demo") for p in glob.glob(os.path.join(PROD_DIR, "assets", "demo", "*.json"))]
 model_datas = [(p, os.path.join("ml", "models")) for p in glob.glob(os.path.join(PROD_DIR, "ml", "models", "*.onnx"))]
 
 a = Analysis(
     [ENTRY],
     pathex=[PROD_DIR],
     binaries=[],
-    datas=demo_datas + model_datas,
+    datas=model_datas,
     hiddenimports=[
         "app.mainwindow",
         "app.demo_store",
+        "app.intel_pdf",
         "app.widgets.file_panel",
         "app.widgets.results_tabs",
         "app.widgets.plots",
@@ -48,14 +47,23 @@ a = Analysis(
         "ml.ensemble",
         "ml.cnn_onnx",
         "ml.synth",
+        "ml.explain",
         "pyqtgraph",
         "qt_material",
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtWidgets",
+        "shiboken6",
         "numpy",
         "scipy",
         "scipy.signal",
         "scipy.io.wavfile",
+        "scipy.special",
         "sklearn",
         "sklearn.ensemble",
+        "sklearn.tree",
+        "sklearn.utils",
+        "joblib",
         "onnxruntime",
         "numba",
         "pyfftw",
@@ -65,6 +73,7 @@ a = Analysis(
         "commpy",
         "pyldpc",
         "fpdf",
+        "fpdf.enums",
     ],
     hookspath=[],
     hooksconfig={},

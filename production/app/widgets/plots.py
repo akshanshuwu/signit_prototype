@@ -63,8 +63,12 @@ class WaterfallPlotWidget(pg.PlotWidget):
         dt = (t[-1] - t[0]) / max(len(t) - 1, 1) if len(t) > 1 else 1.0
         df = (f[-1] - f[0]) / max(len(f) - 1, 1) if len(f) > 1 else 1.0
         self._img.setRect(t[0], f[0], dt * len(t), df * len(f))
-        self._plot.setXRange(t[0], t[-1])
-        self._plot.setYRange(f[0], f[-1])
+        # Fit on new data; degenerate ranges (empty/single-point) would
+        # collapse the view, so guard them (window resize itself is native).
+        if len(t) > 1 and t[-1] > t[0]:
+            self._plot.setXRange(t[0], t[-1])
+        if len(f) > 1 and f[-1] > f[0]:
+            self._plot.setYRange(f[0], f[-1])
 
 
 class ConstellationPlotWidget(pg.PlotWidget):

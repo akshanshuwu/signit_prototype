@@ -1,4 +1,8 @@
-"""Phase 1 tests — demo store contract, file validation, ops-console wiring."""
+"""Phase 1 tests — result contract, file validation, window wiring.
+
+File ingest is the only analysis path. Contract checks run against live
+ingest -> chain -> to_demo_dict results (temp .iq files), never bundles.
+"""
 import os
 import sys
 
@@ -7,35 +11,44 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-def test_demo_store_loads_all_with_valid_contract():
-    from app.demo_store import DEMO_IDS, load_demo, validate_demo
+def _live_demo(tmp_path, mod="QPSK", seed=44):
+    from engine.ingest import ingest_file
+    from ml.synth import FS, synth
 
-    assert set(DEMO_IDS) == {"bpsk", "qpsk", "qam16", "fsk2"}
-    for demo_id in DEMO_IDS:
-        demo = load_demo(demo_id)
-        assert validate_demo(demo) == [], f"{demo_id} contract violations"
+    p = tmp_path / f"{mod.lower()}.iq"
+    synth(mod, 20.0, seed).tofile(p)
+    from engine.demod import demodulate_preview
+    from engine.estimators import analyze_preview, to_demo_dict
+    from ml.ensemble import run_ml_vote
+
+    preview = ingest_file(str(p), fs=FS).preview
+    est = analyze_preview(preview, FS, 0.0)
+    from engine.ingest import IngestResult
+
+    demod = demodulate_preview(preview, FS)
+    _cum, vote, _cnn, _lines = run_ml_vote(preview, FS, demod)
+    view = IngestResult(path=str(p), kind="iq", n_samples=len(preview),
+                        fs=FS, fc=0.0, dtype_label="t", sha256="t",
+                        preview=preview)
+    return to_demo_dict(est, view, demod=demod, vote=vote)
 
 
-def test_demo_store_shapes():
-    from app.demo_store import load_demo
+def test_live_results_have_valid_contract(tmp_path):
+    from app.demo_store import validate_demo
 
-    for demo_id in ("bpsk", "qpsk", "qam16", "fsk2"):
-        demo = load_demo(demo_id)
-        assert len(demo["psd"]["freqs"]) == 512
-        assert len(demo["spectrogram"]["freqs"]) == 128
-        assert len(demo["spectrogram"]["times"]) == 64
-        assert len(demo["spectrogram"]["z_db"]) == 128
-        assert len(demo["constellation"]["i"]) <= 2000
-        assert len(demo["bits_preview"]["corr_peak"]["lags"]) == 256
+    for mod in ("BPSK", "QPSK", "16QAM", "2FSK"):
+        demo = _live_demo(tmp_path, mod)
+        assert validate_demo(demo) == [], f"{mod} contract violations"
 
 
-def test_demo_store_rejects_unknown():
-    import pytest
-
-    from app.demo_store import load_demo
-
-    with pytest.raises(ValueError, match="Unknown capture"):
-        load_demo("badid")
+def test_live_result_shapes(tmp_path):
+    demo = _live_demo(tmp_path)
+    assert len(demo["psd"]["freqs"]) == 512
+    assert len(demo["spectrogram"]["freqs"]) == 128
+    assert len(demo["spectrogram"]["times"]) == 64
+    assert len(demo["spectrogram"]["z_db"]) == 128
+    assert len(demo["constellation"]["i"]) <= 2000
+    assert len(demo["bits_preview"]["corr_peak"]["lags"]) == 256
 
 
 def test_file_validation_messages():
@@ -56,18 +69,21 @@ def _make_window():
     return MainWindow()
 
 
-def test_mainwindow_opens_all_demos_all_tabs():
+def test_mainwindow_ingest_renders_all_tabs(tmp_path):
+    from engine.ingest import ingest_file
+    from ml.synth import FS, synth
     from app.widgets.results_tabs import TAB_ORDER
 
     win = _make_window()
     try:
-        assert win.demo_id is None  # F1+: empty drop-prompt startup, no auto demo
-        assert win._demo is None
+        assert win._demo is None  # empty drop-prompt startup, no auto demo
         assert "drop any" in win.mission_log.toPlainText().lower()
-        for demo_id in ("bpsk", "qpsk", "qam16", "fsk2"):
-            assert win.open_demo(demo_id) is True  # fallback path still valid
-            assert win.demo_id == demo_id
-            assert demo_id.upper() in win.windowTitle()
+        for mod in ("BPSK", "QPSK", "16QAM", "2FSK"):
+            p = tmp_path / f"{mod.lower()}.iq"
+            synth(mod, 20.0, 44).tofile(p)
+            win._on_ingested(ingest_file(str(p), fs=FS))
+            assert win._source == "live"
+            assert f"{mod.lower()}.iq" in win.windowTitle()
             for index in range(len(TAB_ORDER)):
                 win.results_tabs.setCurrentIndex(index)
                 assert win.results_tabs.tab_id(index) == TAB_ORDER[index]
@@ -81,13 +97,13 @@ def test_mainwindow_opens_all_demos_all_tabs():
         win.close()
 
 
-def test_mainwindow_invalid_demo_shows_banner():
+def test_empty_export_raises():
+    import pytest
+
     win = _make_window()
-    win.show()
     try:
-        assert win.open_demo("nope") is False
-        assert not win.error_banner.isHidden()
-        assert "Unknown capture" in win.error_banner.text()
+        with pytest.raises(ValueError):
+            win.export_pdf_to("nowhere.pdf")
     finally:
         win.close()
 

@@ -1,26 +1,14 @@
-"""Demo store — frozen contract mirror of prototype lib/demo.ts.
+"""Demo store — frozen result-contract checker (mirror of prototype lib/demo.ts).
 
-Offline fallback + smoke seed only (F1+): the 4 precomputed JSONs bundled
-in assets/demo/ are NOT the primary path. Normal flow is live:
-ingest/synth -> engine chain -> to_demo_dict. Use load_demo() only for
-explicit fallback when the live chain cannot produce a view, and
-validate_demo() as the contract checker (also used by intel_pdf).
+File ingest is the only analysis path. There are no bundled demos and no
+sample buttons. validate_demo() checks the contract of live
+ingest -> engine chain -> to_demo_dict results (also used by intel_pdf).
 Works both in dev and inside a PyInstaller bundle (sys._MEIPASS).
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
-
-DEMO_IDS = ("bpsk", "qpsk", "qam16", "fsk2")
-
-SAMPLE_META = {
-    "bpsk": ("BPSK", "Binary PSK · 2k sym/s · fs 48k"),
-    "qpsk": ("QPSK", "Quadrature PSK · 2k sym/s · fs 48k"),
-    "qam16": ("16QAM", "16-point QAM · 2k sym/s · fs 48k"),
-    "fsk2": ("2FSK", "Binary FSK · dev 2 kHz · fs 48k"),
-}
 
 _REQUIRED = {
     "meta": ("modulation", "fs", "symbol_rate", "snr_db", "center_freq", "file"),
@@ -38,19 +26,6 @@ def resource_path(*parts: str) -> str:
     if base:
         return os.path.join(base, *parts)
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *parts)
-
-
-def demo_path(demo_id: str) -> str:
-    return resource_path("assets", "demo", f"{demo_id}.json")
-
-
-def load_demo(demo_id: str) -> dict:
-    """Load a bundled demo JSON. Raises ValueError for unknown ids, FileNotFoundError if missing."""
-    if demo_id not in DEMO_IDS:
-        raise ValueError(f'Unknown capture "{demo_id}". Open one of bpsk / qpsk / qam16 / fsk2.')
-    path = demo_path(demo_id)
-    with open(path, "r") as f:
-        return json.load(f)
 
 
 def validate_demo(demo: dict) -> list[str]:

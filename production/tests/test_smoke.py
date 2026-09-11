@@ -28,5 +28,12 @@ def test_mainwindow_contract():
         assert win.findChild(object, "resultsTabs") is not None
         assert win.findChild(object, "missionLog") is not None
         assert win.width() >= 1000 and win.height() >= 600
+        # Fullscreen contract: center tabs take extra width (stretch set
+        # in MainWindow), sidebars keep minimums, center never collapses.
+        splitter = win.findChild(object, "mainSplitter")
+        assert not splitter.isCollapsible(1)
+        assert win.file_panel.minimumWidth() >= 220
+        assert win.side_report.minimumWidth() >= 240
+        assert win.minimumWidth() >= 1000 and win.minimumHeight() >= 600
     finally:
         win.close()

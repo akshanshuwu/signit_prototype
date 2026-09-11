@@ -34,8 +34,16 @@ jobs:
           Get-Content production/requirements.txt | Where-Object { $_ -notmatch '^\s*pyldpc==' } | Set-Content "$env:RUNNER_TEMP/requirements-nopyldpc.txt"
           python -m pip install -r "$env:RUNNER_TEMP/requirements-nopyldpc.txt"
 
-      - name: Smoke test (imports + window contract)
-        run: python -m pytest production/tests/test_smoke.py -v
+      - name: Full test suite (all phases + live chain + hardening)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python -m pytest production/tests/ -q
+
+      - name: App smoke (live synth chain x4 + fallback, temp history DB)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python -m app.main --smoke --history-db "$env:RUNNER_TEMP/signit_smoke.db"
+        working-directory: production
 
       - name: Build single-file .exe
         run: pyinstaller production/signit.spec --noconfirm
@@ -44,6 +52,8 @@ jobs:
         run: |
           if (-not (Test-Path "dist/SIGNIT.exe")) { throw "dist/SIGNIT.exe not produced" }
           (Get-Item "dist/SIGNIT.exe").Length
+          $env:QT_QPA_PLATFORM = "offscreen"
+          & "dist/SIGNIT.exe" --smoke --history-db "$env:RUNNER_TEMP/signit_exe_smoke.db"
 
       - name: Upload .exe
         uses: actions/upload-artifact@v4

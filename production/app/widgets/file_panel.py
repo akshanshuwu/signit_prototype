@@ -1,8 +1,7 @@
-"""File panel — left dock: drop/select file, params, sample cards.
+"""File panel — left dock: drop/select file, params, history.
 
-Web UploadBox parity: accepts .iq/.wav/.bin; same validation messages.
-Sample buttons emit synthetic-reference keys (live chain via ml/synth.py),
-NOT bundled JSONs — demo_store is fallback-only since F1.
+Accepts .iq/.wav/.bin for live local analysis. File ingest is the only
+analysis path — no sample buttons, no bundled demos.
 """
 import os
 import re
@@ -22,8 +21,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.demo_store import DEMO_IDS, SAMPLE_META
-
 MAX_MB = 2048
 MAX_LABEL = "2 GB"
 _EXT_RE = re.compile(r"\.(iq|wav|bin)$", re.IGNORECASE)
@@ -36,13 +33,12 @@ def validate_file(name: str, size_bytes: int) -> str:
     if size_bytes > MAX_MB * 1024 * 1024:
         return (
             f"{name} is {size_bytes / 1048576:.1f} MB — files up to {MAX_LABEL} "
-            f"are accepted. Try a synthetic reference below."
+            f"are accepted."
         )
     return f"{name} passed validation. Ingesting for live analysis…"
 
 
 class FilePanel(QWidget):
-    sample_selected = Signal(str)
     file_ingested = Signal(object)  # emits engine.ingest.IngestResult
     reanalyze_requested = Signal(dict)  # {t0_s|None, t1_s|None, snr_db|None, freq_offset_hz}
 
@@ -56,7 +52,7 @@ class FilePanel(QWidget):
         drop_group = QGroupBox("Capture", self)
         drop_group.setObjectName("dropGroup")
         drop_layout = QVBoxLayout(drop_group)
-        self.drop_label = QLabel("▼ DROP any .iq / .wav / .bin here, or Browse ▼\nUp to 2 GB (memmap) • analyzed locally, full report.", drop_group)
+        self.drop_label = QLabel("▼ DROP any .iq / .wav / .bin here, or Browse ▼\nUp to 2 GB (memmap).", drop_group)
         self.drop_label.setObjectName("dropLabel")
         self.drop_label.setAlignment(Qt.AlignCenter)
         self.drop_label.setStyleSheet("color: #94a3b8; padding: 16px;")
@@ -131,22 +127,8 @@ class FilePanel(QWidget):
         re_form.addRow(self.reanalyze_btn)
         layout.addWidget(re_group)
 
-        # Sample captures (live-synthesized references since F1)
-        samples_group = QGroupBox("Synthetic references (live)", self)
-        samples_group.setObjectName("samplesGroup")
-        samples_layout = QVBoxLayout(samples_group)
-        self.sample_buttons: dict[str, QPushButton] = {}
-        for demo_id in DEMO_IDS:
-            mod, desc = SAMPLE_META[demo_id]
-            btn = QPushButton(f"{mod} (live)\n{desc}", samples_group)
-            btn.setObjectName(f"sampleButton_{demo_id}")
-            btn.clicked.connect(lambda _=False, d=demo_id: self.sample_selected.emit(d))
-            samples_layout.addWidget(btn)
-            self.sample_buttons[demo_id] = btn
-        layout.addWidget(samples_group)
-
-        # History (local SQLite, offline) — list + refresh, no network.
-        hist_group = QGroupBox("History (local, offline)", self)
+        # History — list + refresh, no network.
+        hist_group = QGroupBox("History", self)
         hist_group.setObjectName("historyGroup")
         hist_layout = QVBoxLayout(hist_group)
         self.history_list = QListWidget(hist_group)
@@ -195,7 +177,7 @@ class FilePanel(QWidget):
                 f"#{r['id']} {r['modulation']} {r['confidence']:.2f} · {r['filename']} · {r['ts']}"
             )
         if rows:
-            self.history_detail.setText(f"{len(rows)} run(s) — click for details (local only)")
+            self.history_detail.setText(f"{len(rows)} run(s) — click for details")
         else:
             self.history_detail.setText("no runs yet — analyze a capture")
         return len(rows)

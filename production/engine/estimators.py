@@ -46,6 +46,7 @@ class EstimateResult:
     const_i: np.ndarray = field(repr=False)     # (<=2000,)
     const_q: np.ndarray = field(repr=False)     # (<=2000,)
     snr_db: float = 0.0
+    wav_snr_db: float = 0.0  # measured real-only (mono/BW-limited) path
     bw_hz: float = 0.0
     peak_freq: float = 0.0
     env_mean: float = 0.0
@@ -174,6 +175,26 @@ def estimate_snr_bw(freqs: np.ndarray, mags_db: np.ndarray) -> tuple[float, floa
     return snr, bw, peak_freq
 
 
+def wav_equivalent_snr(x: np.ndarray, fs: int) -> float:
+    """Measured .wav-equivalent SNR from the real-only (mono) path.
+
+    A .wav capture keeps only the real channel (mono I, Q=0) with
+    limited bandwidth, so phase information is lost and the image
+    folds back. Measuring the SAME peak-vs-median estimator on the
+    real-only signal yields a naturally lower SNR that varies per
+    file/modulation — never a fixed -5.5 dB offset.
+    """
+    r = np.asarray(_as_complex(x).real, dtype=np.complex64)
+    if r.size < 64:
+        return 0.0
+    try:
+        freqs, mags = compute_psd(r, fs)
+        snr, _, _ = estimate_snr_bw(freqs, mags)
+        return float(snr)
+    except Exception:
+        return 0.0
+
+
 def envelope_mean(x: np.ndarray) -> float:
     """Mean Hilbert envelope of the real part (bounded to 8k samples)."""
     from scipy.signal import hilbert
@@ -226,12 +247,14 @@ def analyze_preview(preview: np.ndarray, fs: int, fc: float = 0.0) -> EstimateRe
     times, s_freqs, z = compute_spectrogram(x, fs)
     ci, cq = constellation_points(x)
     snr, bw, peak = estimate_snr_bw(freqs, mags)
+    wav_snr = wav_equivalent_snr(x, fs)
     env = envelope_mean(x)
     hex_t, ascii_t, lags, vals, plag, pval = bits_preview(x)
     return EstimateResult(
         fs=int(fs), fc=float(fc), n_preview=len(x),
         freqs=freqs, mags_db=mags, spec_times=times, spec_freqs=s_freqs,
-        spec_z_db=z, const_i=ci, const_q=cq, snr_db=snr, bw_hz=bw,
+        spec_z_db=z, const_i=ci, const_q=cq, snr_db=snr, wav_snr_db=wav_snr,
+        bw_hz=bw,
         peak_freq=peak, env_mean=env, corr_lags=lags, corr_vals=vals,
         corr_lag=plag, corr_value=pval, hex_text=hex_t, ascii_text=ascii_t,
     )
@@ -240,7 +263,8 @@ def analyze_preview(preview: np.ndarray, fs: int, fc: float = 0.0) -> EstimateRe
 def estimator_log_lines(est: EstimateResult) -> list[str]:
     return [
         f"psd ok: peak {est.peak_freq / 1000.0:.2f} kHz, bw {est.bw_hz / 1000.0:.2f} kHz",
-        f"snr est {est.snr_db:.1f} dB from {est.n_preview} preview samples",
+        f"snr est {est.snr_db:.1f} dB (iq) / {est.wav_snr_db:.1f} dB (wav-equiv) "
+        f"from {est.n_preview} preview samples",
         f"spectrogram ok: {est.spec_z_db.shape[0]}x{est.spec_z_db.shape[1]}, "
         f"constellation {len(est.const_i)} pts",
     ]
@@ -261,10 +285,17 @@ def to_demo_dict(est: EstimateResult, ingest, kind_note: str = "", demod=None, v
 
     assert isinstance(ingest, IngestResult)
     base = os.path.basename(ingest.path)
-    wav_snr = est.snr_db if ingest.kind == "wav" else max(0.0, est.snr_db - 5.5)
+    # Both SNRs measured with the same peak-vs-median estimator:
+    # iq = full complex preview, wav = real-only (mono) path. Varies
+    # per file/modulation — never a fixed offset.
+    wav_snr = float(getattr(est, "wav_snr_db", 0.0))
     demod_ok = demod is not None and getattr(demod, "modulation", "UNKNOWN") != "UNKNOWN"
     vote_ok = vote is not None and getattr(vote, "winner", "UNKNOWN") != "UNKNOWN"
-    demod_conf = round(float(min(0.95, max(0.05, demod.margin_db / 12.0))), 2) if demod_ok else 0.0
+    if demod_ok:
+        from engine.demod import margin_to_conf
+        demod_conf = round(margin_to_conf(demod.margin_db), 2)
+    else:
+        demod_conf = 0.0
     if vote_ok:
         modulation = vote.winner
         confidence = round(float(vote.confidence), 2)

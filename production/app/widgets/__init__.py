@@ -1,1 +1,1 @@
-"""SIGNIT reusable widgets (ops-console GUI)."""
+"""SIGNIT reusable widgets."""

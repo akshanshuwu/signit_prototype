@@ -1,17 +1,17 @@
-# SIGNIT Production (Offline, Finals) — native Windows .exe
+# SIGNIT Production — native Windows .exe
 
 Locked stack: PySide6 + pyqtgraph + Qt-Material Dark + in-process Python (NumPy + pyFFTW + SciPy + Numba + memmap + QThread) + ONNX Runtime + galois + scikit-commpy + pyldpc + PyInstaller single .exe.
 
-Status: Phases 0–6 done. Ops-console GUI ingests real `.iq/.wav/.bin` (memmap + streaming hash) and runs estimators → try-all demod → ML vote ensemble (cumulants + sklearn RandomForest + ONNX CNN) → FEC assessment (pure-NumPy RS + Viterbi + de-interleave try-all), all wired into Report/tabs/log.
+Status: file ingest is the only analysis path. The GUI ingests real `.iq/.wav/.bin` (memmap + streaming hash) and runs estimators → try-all demod → ML vote ensemble (cumulants + sklearn RandomForest + ONNX CNN) → FEC assessment (pure-NumPy RS + Viterbi + de-interleave try-all), all wired into Report/tabs/log. No sample buttons, no bundled demos.
 Independent from prototype — no imports from `prototype/`.
 
 ## What exists
-- `app/` — ops console: `main.py` entry (`--smoke` headless check), `mainwindow.py`, widgets (`file_panel`, `results_tabs`, `plots`, `report_card`, `bits_view`, `comparator`, `mission_log`), `demo_store` (4 bundled captures)
+- `app/` — `main.py` entry (`--smoke` headless check via temp-file ingest), `mainwindow.py`, widgets (`file_panel`, `results_tabs`, `plots`, `report_card`, `bits_view`, `comparator`, `mission_log`), `demo_store` (result-contract checker)
 - `engine/` — `ingest.py` (memmap chunked + sha256), `estimators.py` (Welch PSD, spectrogram, constellation, SNR/BW), `demod.py` (BPSK/QPSK/16QAM/2FSK try-all + EVM rank + sync finder), `fec.py` (RS codec + Viterbi + de-interleave try-all; galois/commpy/pyldpc are optional accelerators)
 - `ml/` — `cumulants.py`, `ensemble.py` (demod 0.40 / cumulants 0.25 / sklearn 0.20 / cnn 0.15 + lone-CNN-abstain guard), `cnn_onnx.py` (carrier+timing-corrected symbol images), `synth.py`, `train_cnn.py`
 - `ml/models/signit_cnn.onnx` — trained artifact (repo-excluded; reproduce via training below)
-- `tests/` — 66 tests across test_phase1–6 + test_smoke, all green offscreen
-- `signit.spec` — PyInstaller single-file spec (hidden imports + demo-data bundling; proven only on Windows)
+- `tests/` — test_phase1–7 + test_smoke + test_live_chain + test_hardening, all green offscreen
+- `signit.spec` — PyInstaller single-file spec (hidden imports + ONNX model bundling; proven only on Windows)
 - `requirements.txt` — pinned deps for Python 3.10 (CI + .exe target)
 
 ## Run (dev, macOS/Linux — Python 3.10 venv)
