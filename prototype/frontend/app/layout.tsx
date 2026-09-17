@@ -20,7 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="flex items-center gap-4 text-xs font-medium text-slate-400">
               <Link href="/analyze" className="hover:text-slate-100">Analyzer</Link>
-              <Link href="/analyze/qpsk" className="hover:text-slate-100">Sample analysis</Link>
             </nav>
           </div>
         </header>

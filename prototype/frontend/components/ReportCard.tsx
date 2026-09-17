@@ -1,5 +1,5 @@
-import type { DemoJson } from "../lib/demo";
-import { formatKhz } from "../lib/demo";
+import type { DemoJson } from "../lib/analysis";
+import { formatKhz } from "../lib/analysis";
 
 export default function ReportCard({ data }: { data: DemoJson }) {
   const p = data.predictions;

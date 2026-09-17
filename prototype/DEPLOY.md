@@ -22,14 +22,15 @@ git push -u origin main
 
 ## 3. Verify live link (must pass before PPT)
 - `https://<app>.vercel.app/` → landing loads
-- `https://<app>.vercel.app/analyze` → upload + 4 samples
-- `https://<app>.vercel.app/analyze/qpsk` (and bpsk/qam16/fsk2) → all 6 tabs render
+- `https://<app>.vercel.app/analyze` → upload box + fs/fc/dtype selects
+- Drop a real 1–5MB `.wav` → full Report/Spectrum/Waterfall/Constellation/Compare/Bits in <3s
+- Drop a real `.iq` (int16 default; change fs/dtype if needed) → same 6 views
 - Incognito + phone check. If a tab is blank, hard-refresh (Plotly CDN-free bundle, no external calls).
 
 ## 4. Rollback
 Vercel → Deployments → previous deployment → Promote to Production. PPT QR stays on `/analyze` (stable route).
 
 ## Notes
-- Demo JSONs total 432KB, served statically — no cold starts, link never sleeps.
+- All DSP runs in-browser (≤100MB, 262k-sample head preview) — no cold starts, link never sleeps, no upload leaves the device.
 - `prototype/backend/` is NOT deployed in v1. `prototype/tools/gen_demos.py` is local-only.
 - Next 14.2.5 shows a security notice upstream; fine for prototype, upgrade before any production reuse.
