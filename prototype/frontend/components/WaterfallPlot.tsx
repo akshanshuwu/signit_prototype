@@ -27,16 +27,16 @@ export default function WaterfallPlot({ times, freqs, zDb }: Props) {
             type: "heatmap",
             colorscale: "Viridis",
             showscale: true,
-            colorbar: { title: "dB", tickfont: { color: "#94a3b8" } }
+            colorbar: { title: "dB", tickfont: { color: "#8B98A9" } }
           }
         ],
         {
           margin: { l: 48, r: 60, t: 12, b: 40 },
-          xaxis: { title: "Time (s)", color: "#94a3b8", gridcolor: "#1e293b" },
-          yaxis: { title: "Freq (kHz)", color: "#94a3b8", gridcolor: "#1e293b" },
-          paper_bgcolor: "#020617",
-          plot_bgcolor: "#020617",
-          font: { color: "#94a3b8", size: 11 }
+          xaxis: { title: "Time (s)", color: "#8B98A9", gridcolor: "#1C2536" },
+          yaxis: { title: "Freq (kHz)", color: "#8B98A9", gridcolor: "#1C2536" },
+          paper_bgcolor: "#0A0F1A",
+          plot_bgcolor: "#0A0F1A",
+          font: { color: "#8B98A9", size: 10, family: "IBM Plex Mono, monospace" }
         },
         { responsive: true, displayModeBar: false }
       );
@@ -44,8 +44,11 @@ export default function WaterfallPlot({ times, freqs, zDb }: Props) {
     draw();
     return () => {
       cancelled = true;
+      if (divRef.current) {
+        import("plotly.js-dist-min").then((m) => (m.default as any).purge(divRef.current!)).catch(() => {});
+      }
     };
   }, [times, freqs, zDb]);
 
-  return <div ref={divRef} className="h-64 w-full" />;
+  return <div ref={divRef} className="h-72 w-full border border-line" />;
 }

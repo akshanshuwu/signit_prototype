@@ -81,7 +81,11 @@ export default function UploadBox({ onResult, onError }: Props) {
   }
 
   return (
-    <div>
+    <div className="console-frame p-4">
+      <div className="flex items-center justify-between font-mono text-[11px] tracking-[0.18em] text-fog">
+        <p>SIGNAL INPUT</p>
+        <p>ACCEPT .iq / .wav / .bin</p>
+      </div>
       <div
         role="button"
         tabIndex={0}
@@ -90,16 +94,22 @@ export default function UploadBox({ onResult, onError }: Props) {
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files?.[0]); }}
-        className={`block cursor-pointer rounded-xl border border-dashed p-8 text-center text-sm transition ${
-          drag ? "border-emerald-500 bg-slate-900/70 text-slate-200" : "border-slate-700 bg-slate-900/40 text-slate-400 hover:border-emerald-600 hover:bg-slate-900/70"
+        className={`mt-3 block cursor-pointer border border-dashed p-6 text-sm transition ${
+          drag ? "border-signal bg-signal/10 text-paper" : "border-line bg-console text-paper hover:border-signal"
         }`}
       >
-        {status === "decoding" || status === "analyzing" ? (
-          <span>Processing…</span>
+        {(status === "decoding" || status === "analyzing") ? (
+          <span className="font-mono text-[13px] font-bold text-signal">
+            {status === "decoding" ? "DECODING…" : "ANALYZING…"}
+          </span>
         ) : (
-          <>Drop an .iq, .wav or .bin file here, or click to browse</>
+          <span><span className="font-bold">Drop capture file</span> <span className="text-fog">or click to browse — ≤{MAX_MB} MB, on-device</span></span>
         )}
-        <span className="mt-1 block text-xs text-slate-500">Up to {MAX_MB} MB · analyzed in your browser</span>
+        {(status === "decoding" || status === "analyzing") && (
+          <span className="mt-3 block h-1 max-w-md overflow-hidden bg-line">
+            <span className="signit-scan block h-full w-1/3 bg-signal" />
+          </span>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -108,34 +118,34 @@ export default function UploadBox({ onResult, onError }: Props) {
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-        <label className="rounded-lg border border-slate-800 bg-slate-900/40 p-2">
-          <span className="block text-slate-500">Sampling rate (for .iq)</span>
-          <select value={fs} onChange={(e) => setFs(Number(e.target.value))} className="mt-1 w-full bg-transparent text-slate-200">
+      <div className="mt-3 grid grid-cols-3 gap-px border border-line bg-line font-mono text-[12px]">
+        <label className="bg-panel p-2.5" title="Sampling rate used to interpret raw .iq/.bin. Ignored for .wav (header wins).">
+          <span className="block text-fog">FS <span className="text-fog/70">(.iq)</span></span>
+          <select value={fs} onChange={(e) => setFs(Number(e.target.value))} className="mt-1 w-full bg-transparent text-paper">
             {[48000, 96000, 192000, 1000000].map((v) => (
-              <option key={v} value={v} className="bg-slate-900">{v >= 1000000 ? "1M" : `${v / 1000}k`}</option>
+              <option key={v} value={v} className="bg-panel">{v >= 1000000 ? "1M" : `${v / 1000}k`}</option>
             ))}
           </select>
         </label>
-        <label className="rounded-lg border border-slate-800 bg-slate-900/40 p-2">
-          <span className="block text-slate-500">Center freq</span>
-          <select value={fc} onChange={(e) => setFc(Number(e.target.value))} className="mt-1 w-full bg-transparent text-slate-200">
+        <label className="bg-panel p-2.5" title="Center frequency tag attached to the analysis (does not resample).">
+          <span className="block text-fog">FC</span>
+          <select value={fc} onChange={(e) => setFc(Number(e.target.value))} className="mt-1 w-full bg-transparent text-paper">
             {[0, 100000, 1000000].map((v) => (
-              <option key={v} value={v} className="bg-slate-900">{v === 0 ? "0 (baseband)" : v >= 1000000 ? "1M" : `${v / 1000}k`}</option>
+              <option key={v} value={v} className="bg-panel">{v === 0 ? "0 base" : v >= 1000000 ? "1M" : `${v / 1000}k`}</option>
             ))}
           </select>
         </label>
-        <label className="rounded-lg border border-slate-800 bg-slate-900/40 p-2">
-          <span className="block text-slate-500">Data format</span>
-          <select value={dtype} onChange={(e) => setDtype(e.target.value as DtypeLabel)} className="mt-1 w-full bg-transparent text-slate-200">
-            <option value="int16" className="bg-slate-900">int16 IQ</option>
-            <option value="float32" className="bg-slate-900">float32 IQ</option>
-            <option value="uint8" className="bg-slate-900">uint8 RTL</option>
+        <label className="bg-panel p-2.5" title="Binary layout of .iq/.bin: int16 interleaved I/Q (default), float32 I/Q, or uint8 RTL-SDR offset binary.">
+          <span className="block text-fog">FORMAT</span>
+          <select value={dtype} onChange={(e) => setDtype(e.target.value as DtypeLabel)} className="mt-1 w-full bg-transparent text-paper">
+            <option value="int16" className="bg-panel">int16 IQ</option>
+            <option value="float32" className="bg-panel">float32 IQ</option>
+            <option value="uint8" className="bg-panel">uint8 RTL</option>
           </select>
         </label>
       </div>
       {msg && (
-        <p className={`mt-2 rounded-lg border p-2.5 text-xs ${status === "error" ? "border-red-800/60 bg-red-950/60 text-red-200" : "border-slate-700 bg-slate-900/60 text-slate-300"}`}>
+        <p className={`mt-2 border p-2.5 font-mono text-[12px] ${status === "error" ? "border-warn/60 bg-warn/10 text-warn" : "border-line bg-console text-fog"}`}>
           {msg}
         </p>
       )}
