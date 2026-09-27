@@ -1,5 +1,4 @@
 import Link from "next/link";
-import DownloadExe from "../components/DownloadExe";
 import Card from "../components/ui/Card";
 import SectionTitle from "../components/ui/SectionTitle";
 import LiveHeroViz from "../components/LiveHeroViz";
@@ -35,7 +34,7 @@ export default function LandingPage() {
             <Link href="/analyze" className="btn-primary px-5 py-2.5 font-mono text-[13px]">
               OPEN ANALYZER
             </Link>
-            <Link href="#download" className="btn-secondary px-5 py-2.5 font-mono text-[13px]">
+            <Link href="/download" className="btn-secondary px-5 py-2.5 font-mono text-[13px]">
               WINDOWS BUILD
             </Link>
           </div>
@@ -81,11 +80,22 @@ export default function LandingPage() {
         </div>
       </div>
 
-      <div id="download" className="mt-14 scroll-mt-24">
+      <div className="mt-14">
         <p className="kicker">02 // Offline proof</p>
-        <div className="mt-4">
-          <DownloadExe />
-        </div>
+        <Card className="mt-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg font-bold text-paper">SIGNIT for Windows</p>
+              <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-fog">
+                Standalone offline desktop app for any-file proof — no browser,
+                no upload, single .exe.
+              </p>
+            </div>
+            <Link href="/download" className="btn-primary shrink-0 px-5 py-2.5 font-mono text-[13px]">
+              GET THE WINDOWS BUILD →
+            </Link>
+          </div>
+        </Card>
       </div>
     </div>
   );

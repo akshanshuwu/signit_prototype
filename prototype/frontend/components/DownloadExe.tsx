@@ -1,10 +1,6 @@
 "use client";
 
-const EXE_URL = process.env.NEXT_PUBLIC_EXE_URL ?? "";
-const EXE_VERSION = process.env.NEXT_PUBLIC_EXE_VERSION ?? "";
-const EXE_SIZE = process.env.NEXT_PUBLIC_EXE_SIZE ?? "";
-const EXE_SHA256 = process.env.NEXT_PUBLIC_EXE_SHA256 ?? "";
-const RELEASE_URL = process.env.NEXT_PUBLIC_RELEASE_URL ?? "";
+import { EXE_URL, EXE_VERSION, EXE_SIZE, EXE_SHA256, RELEASE_URL } from "../lib/download";
 
 export default function DownloadExe({ compact = false }: { compact?: boolean }) {
   if (!EXE_URL) {

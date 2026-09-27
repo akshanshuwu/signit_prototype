@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="flex shrink-0 items-center gap-3 font-mono text-[11px] text-fog sm:gap-5 sm:text-[12px]">
               <Link href="/analyze" className="whitespace-nowrap hover:text-paper"><span className="mr-1 text-signal">01</span>ANALYZER</Link>
-              <Link href="/#download" className="whitespace-nowrap rounded-md border border-line bg-panel px-2.5 py-1.5 text-paper shadow-subtle hover:border-signal">
+              <Link href="/download" className="whitespace-nowrap rounded-md border border-line bg-panel px-2.5 py-1.5 text-paper shadow-subtle hover:border-signal">
                 <span className="mr-1 text-signal">02</span>WINDOWS BUILD
               </Link>
             </nav>
@@ -40,7 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <p className="md:text-right">
               <Link href="/analyze" className="hover:text-paper">ANALYZER</Link>
               {" — "}
-              <Link href="/#download" className="text-signal">WINDOWS BUILD</Link>
+              <Link href="/download" className="text-signal">WINDOWS BUILD</Link>
             </p>
           </div>
         </footer>
