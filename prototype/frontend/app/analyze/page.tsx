@@ -12,6 +12,7 @@ import Comparator from "../../components/Comparator";
 import BitsView from "../../components/BitsView";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
+import ExportPdfButton from "../../components/ExportPdfButton";
 import AudioPlayer from "../../components/AudioPlayer";
 import WaveformPlayhead from "../../components/WaveformPlayhead";
 import LiveSpectrumCanvas from "../../components/LiveSpectrumCanvas";
@@ -130,6 +131,7 @@ export default function AnalyzePage() {
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-line bg-console px-4 py-2.5 font-mono text-[12px]">
               <p className="min-w-0 flex-1 truncate">FILE <span className="text-paper">{data.meta.file}</span></p>
               <p className="shrink-0 text-fog">MOD <span className="text-signal">{data.predictions.modulation}</span> · CONF {(data.predictions.confidence * 100).toFixed(0)}%{ms !== null && <> · {ms} MS ON-DEVICE</>}</p>
+              {iq && <ExportPdfButton demo={data} iq={iq} mono={playback?.mono ?? null} />}
             </div>
             <div className="flex min-w-0 gap-0 overflow-x-auto border-b border-line font-mono text-[12px]" role="tablist" aria-label="Analysis views">
               {TABS.map((t) => (

@@ -12,6 +12,10 @@ export interface IQData {
   totalSamples?: number;
   /** Human-readable preview note, e.g. "head 262144/12.5M samples". */
   previewNote?: string;
+  /** Source file size in bytes (set by the uploader for reports). */
+  fileSizeBytes?: number;
+  /** PCM channel count for .wav (1 mono, 2 stereo). Undefined for raw IQ. */
+  channels?: number;
 }
 
 export const PREVIEW_MAX = 262144;
@@ -119,7 +123,7 @@ export async function parseWav(buf: ArrayBuffer, fileName: string): Promise<IQDa
   const i = new Float32Array(left);
   const q = right ? new Float32Array(right) : new Float32Array(left.length);
   const capped = capPreview(i, q);
-  return { i: capped.i, q: capped.q, fs: dec.sampleRate, fileName, kind: "wav" };
+  return { i: capped.i, q: capped.q, fs: dec.sampleRate, fileName, kind: "wav", channels: dec.ch.length };
 }
 
 export function parseRawIQ(buf: ArrayBuffer, fileName: string, fs: number, dtype: DtypeLabel): IQData {

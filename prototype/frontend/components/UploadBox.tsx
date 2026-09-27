@@ -60,6 +60,7 @@ export default function UploadBox({ onResult, onError }: Props) {
         const ms = Math.round(performance.now() - t0);
         setStatus("done");
         setMsg(`${f.name} → ${demo.predictions.modulation} ${(demo.predictions.confidence * 100).toFixed(0)}% confidence in ${ms} ms. Full analysis below.`);
+        iq.fileSizeBytes = f.size;
         onResult(demo, ms, iq);
         return;
       }
@@ -74,6 +75,7 @@ export default function UploadBox({ onResult, onError }: Props) {
       const ms = Math.round(performance.now() - t0);
       setStatus("done");
       setMsg(`${f.name} → ${demo.predictions.modulation} ${(demo.predictions.confidence * 100).toFixed(0)}% confidence in ${ms} ms. Full analysis below.`);
+      iq.fileSizeBytes = f.size;
       onResult(demo, ms, iq);
     } catch (e: any) {
       const m = e?.message ?? "Analysis failed.";
