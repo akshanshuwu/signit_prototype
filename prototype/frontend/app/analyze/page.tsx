@@ -10,7 +10,6 @@ import ReportCard from "../../components/ReportCard";
 import MissionLog from "../../components/MissionLog";
 import Comparator from "../../components/Comparator";
 import BitsView from "../../components/BitsView";
-import DownloadExe from "../../components/DownloadExe";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import AudioPlayer from "../../components/AudioPlayer";
@@ -205,7 +204,13 @@ export default function AnalyzePage() {
                   <MissionLog lines={data.log} />
                 </div>
                 <div className="min-w-0 bg-panel p-4">
-                  <DownloadExe compact />
+                  <p className="font-mono text-[11px] tracking-[0.2em] text-fog">02 // WINDOWS BUILD</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-fog">
+                    Offline .exe for any-file proof.
+                  </p>
+                  <Link href="/download" className="btn-secondary mt-3 block px-3 py-2 text-center font-mono text-[12px]">
+                    GET THE WINDOWS BUILD →
+                  </Link>
                 </div>
               </div>
             </div>
@@ -214,7 +219,20 @@ export default function AnalyzePage() {
       )}
 
       <div className="mt-10">
-        <DownloadExe />
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg font-bold text-paper">SIGNIT for Windows</p>
+              <p className="mt-1 max-w-xl text-[13px] leading-relaxed text-fog">
+                Standalone offline desktop app for any-file proof — no browser,
+                no upload, single .exe.
+              </p>
+            </div>
+            <Link href="/download" className="btn-primary shrink-0 px-5 py-2.5 font-mono text-[13px]">
+              GET THE WINDOWS BUILD →
+            </Link>
+          </div>
+        </Card>
       </div>
     </div>
   );
