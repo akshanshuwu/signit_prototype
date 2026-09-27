@@ -22,15 +22,15 @@ export default function ReportCard({ data }: { data: DemoJson }) {
       <div className="mt-2 h-1.5 bg-line" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} title={`${pct}% confidence`}>
         <div className="h-full bg-signal" style={{ width: `${pct}%` }} />
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-px border border-line bg-line font-mono text-[12px] md:grid-cols-3">
+      <dl className="mt-4 grid min-w-0 grid-cols-2 gap-px border border-line bg-line font-mono text-[12px] sm:grid-cols-3">
         {rows.map(([k, v]) => (
-          <div key={k} className="bg-panel p-2.5">
+          <div key={k} className="min-w-0 break-words bg-panel p-2.5">
             <dt className="text-fog">{k}</dt>
             <dd className="mt-0.5 font-bold text-paper">{v}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-2 font-mono text-[11px] text-fog">SRC {data.meta.file} · FS {data.meta.fs} · RS {data.meta.symbol_rate} · SNR {data.meta.snr_db}dB</p>
+      <p className="mt-2 break-words font-mono text-[11px] text-fog">SRC {data.meta.file} · FS {data.meta.fs} · RS {data.meta.symbol_rate} · SNR {data.meta.snr_db}dB</p>
     </div>
   );
 }

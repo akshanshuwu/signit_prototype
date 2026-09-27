@@ -9,7 +9,7 @@ const RELEASE_URL = process.env.NEXT_PUBLIC_RELEASE_URL ?? "";
 export default function DownloadExe({ compact = false }: { compact?: boolean }) {
   if (!EXE_URL) {
     return (
-      <div className="border border-line bg-panel p-4">
+      <div className="signit-card min-w-0 p-4">
         <p className="font-mono text-[11px] tracking-[0.2em] text-fog">02 // WINDOWS BUILD</p>
         <p className="mt-1 font-display text-base font-bold">Offline .exe — in final assembly</p>
         <p className="mt-1 text-[12px] leading-relaxed text-fog">
@@ -30,7 +30,7 @@ export default function DownloadExe({ compact = false }: { compact?: boolean }) 
       <p className="font-mono text-[11px] tracking-[0.2em] text-fog">02 // WINDOWS BUILD {EXE_VERSION && <>· {EXE_VERSION}</>}</p>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
         <p className="font-display text-lg font-bold">SIGNIT for Windows{EXE_SIZE && <span className="ml-2 font-mono text-[12px] font-normal text-fog">{EXE_SIZE}</span>}</p>
-        <a href={EXE_URL} download className="bg-signal px-5 py-2.5 font-mono text-[13px] font-bold text-ink hover:brightness-110">
+        <a href={EXE_URL} download className="btn-primary px-5 py-2.5 font-mono text-[13px]">
           DOWNLOAD SIGNIT.EXE
         </a>
       </div>

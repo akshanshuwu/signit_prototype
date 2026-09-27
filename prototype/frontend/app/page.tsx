@@ -1,5 +1,8 @@
 import Link from "next/link";
 import DownloadExe from "../components/DownloadExe";
+import Card from "../components/ui/Card";
+import SectionTitle from "../components/ui/SectionTitle";
+import LiveHeroViz from "../components/LiveHeroViz";
 
 const PIPELINE = [
   { n: "01", t: "INGEST", d: "memmap read · int16 / float32 / uint8 IQ or PCM wav · SHA logged · ≤100 MB, head preview over 15 MB." },
@@ -16,8 +19,8 @@ const SPECS = [
 
 export default function LandingPage() {
   return (
-    <div className="mx-auto max-w-6xl px-6 pb-16">
-      <div className="grid gap-8 pt-12 lg:grid-cols-12">
+    <div className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+      <div className="grid min-w-0 gap-6 pt-8 sm:pt-12 lg:grid-cols-12">
         <div className="lg:col-span-8">
           <p className="kicker">SIGNIT // RF capture analyzer</p>
           <h1 className="mt-4 font-display text-4xl font-bold leading-[1.02] tracking-tight sm:text-6xl">
@@ -29,10 +32,10 @@ export default function LandingPage() {
             for inspection. Field path: web triage here, full offline proof in the Windows build.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/analyze" className="bg-signal px-5 py-2.5 font-mono text-[13px] font-bold text-ink hover:brightness-110">
+            <Link href="/analyze" className="btn-primary px-5 py-2.5 font-mono text-[13px]">
               OPEN ANALYZER
             </Link>
-            <Link href="#download" className="border border-line bg-panel px-5 py-2.5 font-mono text-[13px] text-paper hover:border-signal">
+            <Link href="#download" className="btn-secondary px-5 py-2.5 font-mono text-[13px]">
               WINDOWS BUILD
             </Link>
           </div>
@@ -45,20 +48,20 @@ export default function LandingPage() {
             ))}
           </dl>
         </div>
-        <aside className="lg:col-span-4">
-          <div className="console-frame p-4">
-            <p className="font-mono text-[11px] tracking-[0.2em] text-fog">FIELD RECORD · EXAMPLE</p>
-            <div className="mt-3 space-y-2 font-mono text-[12px]">
-              <div className="flex justify-between border-b border-line pb-2"><span className="text-fog">FILE</span><span>qpsk_48k.iq</span></div>
-              <div className="flex justify-between border-b border-line pb-2"><span className="text-fog">FS</span><span>48000 Hz</span></div>
-              <div className="flex justify-between border-b border-line pb-2"><span className="text-fog">VERDICT</span><span className="text-signal">QPSK · 94%</span></div>
-              <div className="flex justify-between border-b border-line pb-2"><span className="text-fog">SNR</span><span>14.8 dB</span></div>
-              <div className="flex justify-between"><span className="text-fog">BW</span><span>4.0 kHz</span></div>
+        <aside className="min-w-0 lg:col-span-4">
+          <Card>
+            <SectionTitle kicker="Live" title="Signal preview" hint="DEMO" />
+            <div className="mt-3 overflow-hidden rounded-md border border-line">
+              <LiveHeroViz mode="demo" />
             </div>
-            <Link href="/analyze" className="mt-4 block border border-line bg-console px-3 py-2 text-center font-mono text-[12px] text-paper hover:border-signal">
-              RUN THIS CAPTURE →
+            <p className="mt-3 text-[12px] leading-relaxed text-fog">
+              Waveform + spectrum preview of what SIGNIT measures. Upload a
+              capture in the Analyzer to see your real signal here.
+            </p>
+            <Link href="/analyze" className="btn-secondary mt-4 block px-3 py-2 text-center font-mono text-[12px]">
+              OPEN ANALYZER →
             </Link>
-          </div>
+          </Card>
           <p className="mt-3 font-mono text-[11px] leading-relaxed text-fog">
             .IQ keeps full I+jQ phase — PSK/QAM hold. .wav is BW-limited PCM — FSK previews, QAM collapses. The Compare tab shows the loss in dB.
           </p>
@@ -67,13 +70,13 @@ export default function LandingPage() {
 
       <div className="mt-14">
         <p className="kicker">Pipeline</p>
-        <div className="mt-4 grid gap-px border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {PIPELINE.map((s) => (
-            <div key={s.n} className="bg-panel p-4">
+            <Card key={s.n} className="p-4">
               <p className="font-mono text-[12px] font-bold text-signal">{s.n}</p>
-              <p className="mt-1 font-display text-sm font-bold">{s.t}</p>
+              <p className="mt-1 font-display text-sm font-bold text-paper">{s.t}</p>
               <p className="mt-1 text-[12px] leading-relaxed text-fog">{s.d}</p>
-            </div>
+            </Card>
           ))}
         </div>
       </div>
